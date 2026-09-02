@@ -2,6 +2,12 @@ name: US Market Telegram Alerts
 
 on:
   workflow_dispatch:
+    inputs:
+      telegram_smoke_test:
+        description: "Send a Telegram test message before running the strategy"
+        required: false
+        default: false
+        type: boolean
   schedule:
     # 22:15 UTC is after the regular US close throughout daylight-saving changes.
     - cron: "15 22 * * 1-5"
@@ -31,6 +37,41 @@ jobs:
 
       - name: Install dependencies
         run: uv sync
+
+      - name: Validate Telegram secrets
+        env:
+          ALERT_TELEGRAM_BOT_TOKEN: ${{ secrets.ALERT_TELEGRAM_BOT_TOKEN }}
+          ALERT_TELEGRAM_CHAT_ID: ${{ secrets.ALERT_TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -z "$ALERT_TELEGRAM_BOT_TOKEN" ] || [ -z "$ALERT_TELEGRAM_CHAT_ID" ]; then
+            echo "Missing ALERT_TELEGRAM_BOT_TOKEN or ALERT_TELEGRAM_CHAT_ID in repository secrets."
+            exit 1
+          fi
+
+      - name: Telegram smoke test (manual runs)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.telegram_smoke_test }}
+        env:
+          ALERT_TELEGRAM_BOT_TOKEN: ${{ secrets.ALERT_TELEGRAM_BOT_TOKEN }}
+          ALERT_TELEGRAM_CHAT_ID: ${{ secrets.ALERT_TELEGRAM_CHAT_ID }}
+        run: |
+          uv run python - <<'PY'
+          import os
+          import requests
+
+          token = os.environ["ALERT_TELEGRAM_BOT_TOKEN"].strip()
+          chat_id = os.environ["ALERT_TELEGRAM_CHAT_ID"].strip()
+          text = "[AI Hedge Fund] Telegram smoke test from GitHub Actions"
+          response = requests.post(
+              f"https://api.telegram.org/bot{token}/sendMessage",
+              json={"chat_id": chat_id, "text": text},
+              timeout=10,
+          )
+          response.raise_for_status()
+          payload = response.json()
+          if not payload.get("ok", False):
+              raise SystemExit(f"Telegram API returned not ok: {payload}")
+          print("Telegram smoke test sent successfully.")
+          PY
 
       - name: Restore alert history
         uses: actions/cache@v4

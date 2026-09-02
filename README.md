@@ -323,6 +323,26 @@ Runs every 15 minutes on weekdays, checks IST market window (09:15–15:30) and 
 
 Add `APCA_API_KEY_ID` and `APCA_API_SECRET_KEY` as GitHub Actions secrets for paper execution.
 
+### GitHub Actions (US close Telegram alerts)
+
+The repository includes a dedicated workflow for Telegram notifications:
+
+```bash
+# Workflow: .github/workflows/us-market-alerts.yml
+# Schedule: Weekdays at 22:15 UTC
+```
+
+Required repository secrets:
+
+```dotenv
+ALERT_TELEGRAM_BOT_TOKEN=123456:your_bot_token
+ALERT_TELEGRAM_CHAT_ID=your_numeric_chat_id
+```
+
+To validate integration immediately, run the workflow manually from the Actions tab
+and enable the `telegram_smoke_test` input. This sends a direct test message before
+the strategy cycle, making secret/configuration problems visible right away.
+
 -----
 
 ## 🔍 Auditability & Reliability
