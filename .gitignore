@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+outputs/*.csv
+logs/*
+.env
+
+outputs/.yfinance_cache/
+outputs/last_decision.json
+outputs/audit/*.jsonl
+outputs/heartbeat.json
+outputs/last_decision.json
+outputs/audit/events.jsonl
+outputs/traces/
+tracelm_traces.db

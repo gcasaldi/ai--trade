@@ -1,0 +1,47 @@
+name: US Market Telegram Alerts
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 22:15 UTC is after the regular US close throughout daylight-saving changes.
+    - cron: "15 22 * * 1-5"
+
+concurrency:
+  group: us-market-telegram-alerts
+  cancel-in-progress: false
+
+jobs:
+  analyze-and-notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Restore alert history
+        uses: actions/cache@v4
+        with:
+          path: outputs/alert_state.json
+          key: telegram-alert-state-${{ github.run_id }}
+          restore-keys: |
+            telegram-alert-state-
+
+      - name: Analyze market and send Telegram alerts
+        env:
+          ALERT_TELEGRAM_BOT_TOKEN: ${{ secrets.ALERT_TELEGRAM_BOT_TOKEN }}
+          ALERT_TELEGRAM_CHAT_ID: ${{ secrets.ALERT_TELEGRAM_CHAT_ID }}
+        run: uv run python scripts/run_daily.py --config configs/live_stub.yaml --dry-run

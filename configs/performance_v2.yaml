@@ -1,0 +1,207 @@
+system:
+  output_dir: outputs
+
+portfolio:
+  symbols:
+    - SPY
+    - QQQ
+    - IWM
+    - MDY
+    - XLK
+    - XLV
+    - XLE
+    - XLF
+    - XLI
+    - XLU
+    - XLP
+    - XLY
+    - XLC
+    - XLRE
+    - MTUM
+    - QUAL
+    - USMV
+    - EFA
+    - EEM
+    - TLT
+    - IEF
+    - SHY
+    - HYG
+    - LQD
+    - TIP
+    - GLD
+    - SLV
+    - USO
+  start_date: '2015-01-01'
+  end_date: null
+  lookback_days: 253
+  max_weight: 0.20
+  gross_limit: 1.00
+  rebalance_every_n_days: 21
+  long_only: true
+
+costs:
+  transaction_cost_bps: 5
+  slippage_bps: 2
+
+risk:
+  target_annual_vol: 0.15
+  min_annual_vol_floor: 0.08
+
+agent:
+  enable_ollama_overlay: false
+  enable_llm_research: false
+  max_headlines: 0
+  max_retries: 1
+  retry_base_delay_sec: 0.2
+
+strategies:
+  weights:
+    trend_following:              0.40
+    mean_reversion:               0.00
+    volatility_carry:             0.10
+    regime_switching:             0.05
+    event_driven:                 0.00
+    relative_strength_rotation:   0.30
+    dual_momentum_gate:           0.15
+
+alpha_pipeline:
+  blend_weight: 0.0
+
+arbitrage:
+  blend_weight: 0.0
+
+microstructure:
+  blend_weight: 0.0
+  enabled: false
+
+research_council:
+  enabled: true
+  blend_weight: 0.10
+  max_rounds: 1
+  request_timeout_sec: 90
+
+learning:
+  enabled: false
+
+execution_controls:
+  min_weight_change_to_trade: 0.02
+  max_turnover_per_cycle: 0.50
+  rebalance_cooldown_cycles: 0
+
+private_alpha:
+  blend_weight: 0.0
+
+benchmark:
+  mode: symbol
+  symbol: SPY
+  alpha_weight: 0.0
+
+fund_manager:
+  turnover_penalty: 0.10
+  risk_penalty_scale: 0.05
+  top_k: 12
+
+regime_controls:
+  regime_blend_factor: 0.20
+  defensive_assets: [TLT, IEF, GLD, SHY]
+  defensive_tilt: 0.05
+  gross_limit_by_regime:
+    trend: 1.00
+    meanrev: 0.90
+    stress: 0.60
+  strategy_weights_by_regime:
+    trend:
+      trend_following:            0.50
+      mean_reversion:             0.00
+      volatility_carry:           0.08
+      regime_switching:           0.02
+      event_driven:               0.00
+      relative_strength_rotation: 0.30
+      dual_momentum_gate:         0.10
+    meanrev:
+      trend_following:            0.20
+      mean_reversion:             0.00
+      volatility_carry:           0.20
+      regime_switching:           0.10
+      event_driven:               0.00
+      relative_strength_rotation: 0.15
+      dual_momentum_gate:         0.35
+    stress:
+      trend_following:            0.05
+      mean_reversion:             0.00
+      volatility_carry:           0.50
+      regime_switching:           0.10
+      event_driven:               0.00
+      relative_strength_rotation: 0.00
+      dual_momentum_gate:         0.35
+
+risk_hard_limits:
+  max_weight: 0.20
+  gross_limit: 1.00
+  net_limit: 0.95
+  min_net_exposure: 0.50
+  max_annual_vol: 0.22
+  drawdown_brake: 0.15
+  brake_scale: 0.70
+  var_limit_95: 0.04
+  es_limit_95: 0.05
+  enable_var_scaling: false
+  concentration_top1_limit: 0.20
+  concentration_top5_limit: 0.80
+  beta_neutral_band: 0.99
+  jump_threshold: 0.12
+  max_leverage_by_regime:
+    trend: 1.0
+    meanrev: 0.90
+    volatility_carry: 1.0
+    stress: 0.60
+
+data_quality:
+  max_nan_ratio: 0.05
+  max_abs_daily_return: 0.30
+  max_zero_price_ratio: 0.0
+  max_staleness_minutes: 9999999
+
+resilience:
+  failure_threshold: 3
+  recovery_timeout_sec: 120
+  degraded_mode_enabled: true
+
+health:
+  deadman_timeout_sec: 900
+
+alerts:
+  enabled: false
+
+tracing:
+  enabled: false
+
+backtest:
+  fast_mode: true
+
+execution:
+  broker: stub
+  primary_broker: stub
+  backup_brokers: [stub]
+  market_mode: us
+
+ai_native_v2:
+  enabled: true
+  use_llm_forecasts: false
+  llm_timeout_seconds: 8
+  alpha_tilt_strength: 0.15
+  bab_tilt_strength: 0.10
+  uncertainty_penalty: 0.50
+  tracking_error_penalty: 1.00
+  max_turnover_per_cycle: 0.10
+  calibration_decay: 0.95
+  calibration_min_history: 20
+  default_regime: sideways
+  min_strategy_weight: 0.03
+  max_strategy_weight: 0.60
+  quality_tilt_strength: 0.35
+  gross_scale_by_regime:
+    bull: 1.00
+    bear: 0.75
+    crisis: 0.45
+    sideways: 0.85
