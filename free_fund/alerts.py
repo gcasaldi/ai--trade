@@ -95,6 +95,7 @@ class AlertManager:
                 "model_positions": {},
                 "ledger": {},
                 "last_summary_date": "",
+                "last_summary_slot": "",
             }
         try:
             raw = json.loads(self.state_path.read_text(encoding="utf-8"))
@@ -106,6 +107,7 @@ class AlertManager:
                 "model_positions": dict(raw.get("model_positions", {}) or {}),
                 "ledger": dict(raw.get("ledger", {}) or {}),
                 "last_summary_date": str(raw.get("last_summary_date", "")),
+                "last_summary_slot": str(raw.get("last_summary_slot", "")),
             }
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
             return {
@@ -114,6 +116,7 @@ class AlertManager:
                 "model_positions": {},
                 "ledger": {},
                 "last_summary_date": "",
+                "last_summary_slot": "",
             }
 
     def _save_state(
@@ -123,6 +126,7 @@ class AlertManager:
         positions: dict[str, dict[str, Any]],
         ledger: dict[str, float],
         last_summary_date: str,
+        last_summary_slot: str,
     ) -> None:
         if self.state_path is None:
             return
@@ -136,6 +140,7 @@ class AlertManager:
                     "model_positions": positions,
                     "ledger": ledger,
                     "last_summary_date": last_summary_date,
+                    "last_summary_slot": last_summary_slot,
                 },
                 indent=2,
                 sort_keys=True,
@@ -304,8 +309,11 @@ class AlertManager:
                 positions.pop(symbol, None)
             changes.append(line)
 
-        today = datetime.now(timezone.utc).date().isoformat()
-        if not changes and state["last_summary_date"] != today:
+        now_italy = datetime.now(timezone.utc).astimezone()
+        today = now_italy.date().isoformat()
+        summary_period = "chiusura" if now_italy.hour >= 17 else "mattina"
+        summary_slot = f"{today}:{summary_period}"
+        if not changes and state["last_summary_slot"] != summary_slot:
             if positions:
                 open_net_total = 0.0
                 for symbol, position in sorted(positions.items()):
@@ -332,12 +340,16 @@ class AlertManager:
                     f"Risultato ancora aperto dopo tasse stimate: EUR {open_net_total:+.2f}"
                 )
             else:
-                changes.append("AZIONE: ATTENDI\nOggi il modello non vede un nuovo acquisto da fare.")
+                changes.append(
+                    "Per ora restiamo tranquilli: il modello non vede un acquisto "
+                    "abbastanza prudente da fare. Ti avviso appena cambia qualcosa."
+                )
 
         if not changes:
             return False
         body = (
-            "Indicazioni del portafoglio modello\n\n" + "\n\n".join(changes) +
+            "Ciao Giulia, ecco il controllo del portafoglio modello.\n\n"
+            + "\n\n".join(changes) +
             "\n\nIl bot non esegue ordini. Controlla sempre il prezzo prima di agire. "
             "Niente leva, vendite allo scoperto o criptovalute. "
             "Le tasse al 26% sono una stima: fa fede il rendiconto del broker."
@@ -356,5 +368,6 @@ class AlertManager:
                 positions,
                 ledger,
                 today,
+                summary_slot,
             )
         return sent

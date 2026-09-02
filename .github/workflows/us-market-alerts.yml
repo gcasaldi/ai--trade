@@ -20,6 +20,8 @@ jobs:
   analyze-and-notify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      TZ: Europe/Rome
     permissions:
       contents: read
 
