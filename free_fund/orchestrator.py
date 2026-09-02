@@ -78,6 +78,7 @@ class CentralizedHedgeFundSystem:
             reference_capital=float(alert_cfg.get("reference_capital", 100.0)),
             stop_loss_pct=float(alert_cfg.get("stop_loss_pct", 0.02)),
             take_profit_pct=float(alert_cfg.get("take_profit_pct", 0.04)),
+            estimated_tax_rate=float(alert_cfg.get("estimated_tax_rate", 0.26)),
         )
         self.tracer = TraceLMLogger(
             enabled=bool(self.cfg.get("tracing", {}).get("enabled", True)),

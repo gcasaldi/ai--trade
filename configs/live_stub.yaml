@@ -156,13 +156,15 @@ health:
 alerts:
   enabled: true
   slack_webhook: ''
-  email_to: recipient@example.com
+  email_to: ''
   smtp_host: smtp.gmail.com
   smtp_port: 587
   min_weight_change: 0.02
   reference_capital: 100.00
   stop_loss_pct: 0.02
   take_profit_pct: 0.04
+  # Prudential estimate for Italian capital-gains tax; the broker statement prevails.
+  estimated_tax_rate: 0.26
   thresholds:
     daily_pnl_drift: 0.03
     strategy_disagreement: 0.70

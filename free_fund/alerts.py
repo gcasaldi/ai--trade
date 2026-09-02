@@ -30,6 +30,7 @@ class AlertManager:
     reference_capital: float = 100.0
     stop_loss_pct: float = 0.02
     take_profit_pct: float = 0.04
+    estimated_tax_rate: float = 0.26
 
     def _send_email(self, subject: str, body: str) -> bool:
         recipient = self.email_to.strip()
@@ -92,6 +93,7 @@ class AlertManager:
                 "state_version": 1,
                 "target_weights": {},
                 "model_positions": {},
+                "ledger": {},
                 "last_summary_date": "",
             }
         try:
@@ -102,6 +104,7 @@ class AlertManager:
                     str(k): float(v) for k, v in raw.get("target_weights", {}).items()
                 },
                 "model_positions": dict(raw.get("model_positions", {}) or {}),
+                "ledger": dict(raw.get("ledger", {}) or {}),
                 "last_summary_date": str(raw.get("last_summary_date", "")),
             }
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
@@ -109,6 +112,7 @@ class AlertManager:
                 "state_version": 1,
                 "target_weights": {},
                 "model_positions": {},
+                "ledger": {},
                 "last_summary_date": "",
             }
 
@@ -117,6 +121,7 @@ class AlertManager:
         run_id: str,
         weights: dict[str, float],
         positions: dict[str, dict[str, Any]],
+        ledger: dict[str, float],
         last_summary_date: str,
     ) -> None:
         if self.state_path is None:
@@ -129,12 +134,39 @@ class AlertManager:
                     "run_id": run_id,
                     "target_weights": weights,
                     "model_positions": positions,
+                    "ledger": ledger,
                     "last_summary_date": last_summary_date,
                 },
                 indent=2,
                 sort_keys=True,
             ),
             encoding="utf-8",
+        )
+
+    def _record_sale(
+        self,
+        ledger: dict[str, float],
+        invested_amount: float,
+        entry_price: float,
+        sale_price: float,
+    ) -> tuple[float, float, float]:
+        gross = invested_amount * ((sale_price / entry_price) - 1.0) if entry_price > 0 else 0.0
+        tax = max(0.0, gross) * max(0.0, float(self.estimated_tax_rate))
+        net = gross - tax
+        ledger["realized_gross"] = float(ledger.get("realized_gross", 0.0)) + gross
+        ledger["estimated_tax"] = float(ledger.get("estimated_tax", 0.0)) + tax
+        ledger["realized_net"] = float(ledger.get("realized_net", 0.0)) + net
+        ledger["sales"] = float(ledger.get("sales", 0.0)) + 1.0
+        return gross, tax, net
+
+    @staticmethod
+    def _sale_result_text(gross: float, tax: float, net: float, ledger: dict[str, float]) -> str:
+        return (
+            f"\nRisultato prima delle tasse: EUR {gross:+.2f}"
+            f"\nTasse italiane stimate (26%): EUR {tax:.2f}"
+            f"\nRisultato dopo la stima delle tasse: EUR {net:+.2f}"
+            f"\nTotale dopo le tasse stimato dall'inizio: "
+            f"EUR {float(ledger.get('realized_net', 0.0)):+.2f}"
         )
 
     def notify_position_changes(
@@ -151,6 +183,7 @@ class AlertManager:
         # current prices, then version 2 distinguishes an intentional exit.
         previous = {} if state["state_version"] < 2 else state["target_weights"]
         positions: dict[str, dict[str, Any]] = state["model_positions"]
+        ledger: dict[str, float] = state["ledger"]
         changes: list[str] = []
         exited_symbols: set[str] = set()
         threshold = max(0.0, float(self.min_weight_change))
@@ -164,18 +197,34 @@ class AlertManager:
             stop = float(position["stop_price"])
             target = float(position["target_price"])
             if price <= stop:
+                invested = float(
+                    position.get(
+                        "invested_amount",
+                        float(position.get("target_weight", 0.0)) * self.reference_capital,
+                    )
+                )
+                gross, tax, net = self._record_sale(ledger, invested, entry, price)
                 changes.append(
                     f"AZIONE: VENDI TUTTO {symbol}\n"
                     f"Motivo: il prezzo e sceso al limite di sicurezza.\n"
                     f"Prezzo di ingresso del modello: {entry:.2f}\nPrezzo osservato: {price:.2f}"
+                    + self._sale_result_text(gross, tax, net, ledger)
                 )
                 exited_symbols.add(symbol)
                 del positions[symbol]
             elif price >= target:
+                invested = float(
+                    position.get(
+                        "invested_amount",
+                        float(position.get("target_weight", 0.0)) * self.reference_capital,
+                    )
+                )
+                gross, tax, net = self._record_sale(ledger, invested, entry, price)
                 changes.append(
                     f"AZIONE: VENDI TUTTO {symbol}\n"
                     f"Motivo: il prezzo ha raggiunto l'obiettivo di guadagno.\n"
                     f"Prezzo di ingresso del modello: {entry:.2f}\nPrezzo osservato: {price:.2f}"
+                    + self._sale_result_text(gross, tax, net, ledger)
                 )
                 exited_symbols.add(symbol)
                 del positions[symbol]
@@ -209,8 +258,18 @@ class AlertManager:
             if price is not None:
                 line += f"\nPrezzo osservato: {price:.2f}"
                 if action in {"COMPRA", "COMPRA ANCORA"} and new > 0:
-                    stop = price * (1.0 - max(0.0, float(self.stop_loss_pct)))
-                    target = price * (1.0 + max(0.0, float(self.take_profit_pct)))
+                    existing = positions.get(symbol, {})
+                    existing_amount = float(existing.get("invested_amount", 0.0))
+                    added_amount = max(0.0, new - max(0.0, old)) * self.reference_capital
+                    total_amount = existing_amount + added_amount
+                    existing_entry = float(existing.get("entry_price", price))
+                    average_entry = (
+                        ((existing_entry * existing_amount) + (price * added_amount)) / total_amount
+                        if total_amount > 0
+                        else price
+                    )
+                    stop = average_entry * (1.0 - max(0.0, float(self.stop_loss_pct)))
+                    target = average_entry * (1.0 + max(0.0, float(self.take_profit_pct)))
                     entry_low = price * 0.9975
                     entry_high = price * 1.0025
                     line += (
@@ -219,12 +278,28 @@ class AlertManager:
                         f"\nValuta di vendere in guadagno se sale a {target:.2f}."
                     )
                     positions[symbol] = {
-                        "entry_price": price,
+                        "entry_price": average_entry,
                         "stop_price": stop,
                         "target_price": target,
                         "target_weight": new,
+                        "invested_amount": total_amount,
                         "opened_run_id": run_id,
                     }
+                elif action in {"VENDI UNA PARTE", "VENDI TUTTO"} and symbol in positions:
+                    position = positions[symbol]
+                    entry = float(position["entry_price"])
+                    current_amount = float(
+                        position.get("invested_amount", max(0.0, old) * self.reference_capital)
+                    )
+                    remaining_amount = max(0.0, new) * self.reference_capital
+                    sold_amount = current_amount if action == "VENDI TUTTO" else max(
+                        0.0, current_amount - remaining_amount
+                    )
+                    gross, tax, net = self._record_sale(ledger, sold_amount, entry, price)
+                    line += self._sale_result_text(gross, tax, net, ledger)
+                    if action == "VENDI UNA PARTE":
+                        position["invested_amount"] = remaining_amount
+                        position["target_weight"] = new
             if action == "VENDI TUTTO":
                 positions.pop(symbol, None)
             changes.append(line)
@@ -232,18 +307,30 @@ class AlertManager:
         today = datetime.now(timezone.utc).date().isoformat()
         if not changes and state["last_summary_date"] != today:
             if positions:
+                open_net_total = 0.0
                 for symbol, position in sorted(positions.items()):
                     price = float(prices.get(symbol, position["entry_price"]))
                     entry = float(position["entry_price"])
                     pnl = (price / entry - 1.0) if entry > 0 else 0.0
+                    invested = float(position.get("invested_amount", 0.0))
+                    open_gross = invested * pnl
+                    open_tax = max(0.0, open_gross) * max(0.0, float(self.estimated_tax_rate))
+                    open_net = open_gross - open_tax
+                    open_net_total += open_net
                     changes.append(
                         f"AZIONE: MANTIENI {symbol}\n"
                         f"Prezzo di ingresso del modello: {entry:.2f}\n"
                         f"Prezzo osservato: {price:.2f}\n"
                         f"Guadagno o perdita dal prezzo di ingresso: {pnl:+.1%}\n"
+                        f"Risultato aperto dopo tasse stimate: EUR {open_net:+.2f}\n"
                         f"Vendi per limitare la perdita se scende a {float(position['stop_price']):.2f}.\n"
                         f"Valuta di vendere in guadagno se sale a {float(position['target_price']):.2f}."
                     )
+                changes.append(
+                    f"Risultato gia incassato dopo tasse stimate: "
+                    f"EUR {float(ledger.get('realized_net', 0.0)):+.2f}\n"
+                    f"Risultato ancora aperto dopo tasse stimate: EUR {open_net_total:+.2f}"
+                )
             else:
                 changes.append("AZIONE: ATTENDI\nOggi il modello non vede un nuovo acquisto da fare.")
 
@@ -252,15 +339,22 @@ class AlertManager:
         body = (
             "Indicazioni del portafoglio modello\n\n" + "\n\n".join(changes) +
             "\n\nIl bot non esegue ordini. Controlla sempre il prezzo prima di agire. "
-            "Niente leva, vendite allo scoperto o criptovalute."
+            "Niente leva, vendite allo scoperto o criptovalute. "
+            "Le tasse al 26% sono una stima: fa fede il rendiconto del broker."
         )
         sent = self._send_telegram(body)
         sent = self._send_email("[AI Hedge Fund] Segnale apri/chiudi posizioni", body) or sent
         if sent:
+            saved_weights = {k: float(v) for k, v in target_weights.items()}
+            # An automatic stop/target closes the model position. Saving it as
+            # flat lets a still-valid signal propose a fresh entry next cycle.
+            for symbol in exited_symbols:
+                saved_weights[symbol] = 0.0
             self._save_state(
                 run_id,
-                {k: float(v) for k, v in target_weights.items()},
+                saved_weights,
                 positions,
+                ledger,
                 today,
             )
         return sent

@@ -100,7 +100,15 @@ def test_model_position_alerts_when_target_is_reached(monkeypatch, tmp_path):
     assert manager.notify_position_changes("run-1", {"SPY": 0.25}, {"SPY": 100.0})
     assert manager.notify_position_changes("run-2", {"SPY": 0.25}, {"SPY": 104.1})
     assert "ha raggiunto l'obiettivo di guadagno" in FakeSMTP.sent[-1].get_content()
-    assert json.loads(state.read_text())["model_positions"] == {}
+    saved = json.loads(state.read_text())
+    assert saved["model_positions"] == {}
+    assert round(saved["ledger"]["realized_gross"], 4) == 1.025
+    assert round(saved["ledger"]["estimated_tax"], 4) == 0.2665
+    assert round(saved["ledger"]["realized_net"], 4) == 0.7585
+    assert "Tasse italiane stimate (26%): EUR 0.27" in FakeSMTP.sent[-1].get_content()
+
+    assert manager.notify_position_changes("run-3", {"SPY": 0.25}, {"SPY": 103.0})
+    assert "AZIONE: COMPRA SPY" in FakeSMTP.sent[-1].get_content()
 
 
 def test_legacy_weight_state_rebuilds_model_position(monkeypatch, tmp_path):
@@ -125,3 +133,4 @@ def test_live_advisor_config_preserves_long_only():
     assert config["portfolio"]["max_weight"] == 0.25
     assert config["portfolio"]["gross_limit"] == 0.75
     assert config["runtime"]["pipeline_mode"] is False
+    assert config["alerts"]["estimated_tax_rate"] == 0.26
