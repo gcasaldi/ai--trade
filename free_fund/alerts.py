@@ -8,6 +8,7 @@ from pathlib import Path
 import smtplib
 import ssl
 from typing import Any
+from datetime import datetime, timezone
 
 import requests
 
@@ -85,21 +86,42 @@ class AlertManager:
         self._send_telegram(text)
         self._send_email(f"[AI Hedge Fund] {title}", serialized)
 
-    def _load_weights(self) -> dict[str, float]:
+    def _load_state(self) -> dict[str, Any]:
         if self.state_path is None or not self.state_path.exists():
-            return {}
+            return {"target_weights": {}, "model_positions": {}, "last_summary_date": ""}
         try:
             raw = json.loads(self.state_path.read_text(encoding="utf-8"))
-            return {str(k): float(v) for k, v in raw.get("target_weights", {}).items()}
+            return {
+                "target_weights": {
+                    str(k): float(v) for k, v in raw.get("target_weights", {}).items()
+                },
+                "model_positions": dict(raw.get("model_positions", {}) or {}),
+                "last_summary_date": str(raw.get("last_summary_date", "")),
+            }
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
-            return {}
+            return {"target_weights": {}, "model_positions": {}, "last_summary_date": ""}
 
-    def _save_weights(self, run_id: str, weights: dict[str, float]) -> None:
+    def _save_state(
+        self,
+        run_id: str,
+        weights: dict[str, float],
+        positions: dict[str, dict[str, Any]],
+        last_summary_date: str,
+    ) -> None:
         if self.state_path is None:
             return
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         self.state_path.write_text(
-            json.dumps({"run_id": run_id, "target_weights": weights}, indent=2, sort_keys=True),
+            json.dumps(
+                {
+                    "run_id": run_id,
+                    "target_weights": weights,
+                    "model_positions": positions,
+                    "last_summary_date": last_summary_date,
+                },
+                indent=2,
+                sort_keys=True,
+            ),
             encoding="utf-8",
         )
 
@@ -112,14 +134,40 @@ class AlertManager:
         """Email material target changes and persist state only after a successful send."""
         if not self.enabled:
             return False
-        previous = self._load_weights()
+        state = self._load_state()
+        previous = state["target_weights"]
+        positions: dict[str, dict[str, Any]] = state["model_positions"]
         changes: list[str] = []
+        exited_symbols: set[str] = set()
         threshold = max(0.0, float(self.min_weight_change))
         prices = latest_prices or {}
+
+        for symbol, position in list(positions.items()):
+            if symbol not in prices:
+                continue
+            price = float(prices[symbol])
+            entry = float(position["entry_price"])
+            stop = float(position["stop_price"])
+            target = float(position["target_price"])
+            if price <= stop:
+                changes.append(
+                    f"CHIUDI   {symbol:6} | STOP raggiunto | ingresso {entry:.2f} | prezzo {price:.2f}"
+                )
+                exited_symbols.add(symbol)
+                del positions[symbol]
+            elif price >= target:
+                changes.append(
+                    f"CHIUDI   {symbol:6} | OBIETTIVO raggiunto | ingresso {entry:.2f} | prezzo {price:.2f}"
+                )
+                exited_symbols.add(symbol)
+                del positions[symbol]
+
         for symbol in sorted(set(previous) | set(target_weights)):
             old = float(previous.get(symbol, 0.0))
             new = float(target_weights.get(symbol, 0.0))
             if abs(new - old) < threshold:
+                continue
+            if symbol in exited_symbols and abs(new) < threshold:
                 continue
             if abs(old) < threshold and abs(new) >= threshold:
                 action = "COMPRA" if new > 0 else "NESSUNA OPERAZIONE"
@@ -139,8 +187,37 @@ class AlertManager:
                 if action in {"COMPRA", "AUMENTA"} and new > 0:
                     stop = price * (1.0 - max(0.0, float(self.stop_loss_pct)))
                     target = price * (1.0 + max(0.0, float(self.take_profit_pct)))
-                    line += f" | stop {stop:.2f} | obiettivo {target:.2f}"
+                    entry_low = price * 0.9975
+                    entry_high = price * 1.0025
+                    line += (
+                        f" | ingresso {entry_low:.2f}-{entry_high:.2f}"
+                        f" | stop {stop:.2f} | obiettivo {target:.2f}"
+                    )
+                    positions[symbol] = {
+                        "entry_price": price,
+                        "stop_price": stop,
+                        "target_price": target,
+                        "target_weight": new,
+                        "opened_run_id": run_id,
+                    }
+            if action == "CHIUDI":
+                positions.pop(symbol, None)
             changes.append(line)
+
+        today = datetime.now(timezone.utc).date().isoformat()
+        if not changes and state["last_summary_date"] != today:
+            if positions:
+                for symbol, position in sorted(positions.items()):
+                    price = float(prices.get(symbol, position["entry_price"]))
+                    entry = float(position["entry_price"])
+                    pnl = (price / entry - 1.0) if entry > 0 else 0.0
+                    changes.append(
+                        f"MANTIENI {symbol:6} | ingresso {entry:.2f} | prezzo {price:.2f}"
+                        f" | andamento {pnl:+.1%} | stop {float(position['stop_price']):.2f}"
+                        f" | obiettivo {float(position['target_price']):.2f}"
+                    )
+            else:
+                changes.append("ATTENDI | nessuna nuova posizione modello da aprire oggi")
 
         if not changes:
             return False
@@ -153,5 +230,10 @@ class AlertManager:
         sent = self._send_telegram(body)
         sent = self._send_email("[AI Hedge Fund] Segnale apri/chiudi posizioni", body) or sent
         if sent:
-            self._save_weights(run_id, {k: float(v) for k, v in target_weights.items()})
+            self._save_state(
+                run_id,
+                {k: float(v) for k, v in target_weights.items()},
+                positions,
+                today,
+            )
         return sent

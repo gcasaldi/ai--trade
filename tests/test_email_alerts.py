@@ -40,6 +40,7 @@ def test_position_email_is_classified_and_deduplicated(monkeypatch, tmp_path):
 
     assert manager.notify_position_changes("run-1", {"SPY": 0.30}, {"SPY": 101.5})
     assert "COMPRA" in FakeSMTP.sent[-1].get_content()
+    assert "ingresso 101.25-101.75" in FakeSMTP.sent[-1].get_content()
     assert "stop 99.47" in FakeSMTP.sent[-1].get_content()
     assert "obiettivo 105.56" in FakeSMTP.sent[-1].get_content()
     assert not manager.notify_position_changes("run-2", {"SPY": 0.30}, {"SPY": 102.0})
@@ -48,6 +49,7 @@ def test_position_email_is_classified_and_deduplicated(monkeypatch, tmp_path):
     assert manager.notify_position_changes("run-3", {"SPY": 0.0}, {"SPY": 99.0})
     assert "CHIUDI" in FakeSMTP.sent[-1].get_content()
     assert json.loads(state.read_text())["target_weights"]["SPY"] == 0.0
+    assert json.loads(state.read_text())["model_positions"] == {}
 
 
 def test_missing_credentials_does_not_consume_signal(monkeypatch, tmp_path):
@@ -85,6 +87,20 @@ def test_telegram_delivery_works_without_email(monkeypatch, tmp_path):
     assert calls[0][1]["chat_id"] == "12345"
     assert "COMPRA" in calls[0][1]["text"]
     assert state.exists()
+
+
+def test_model_position_alerts_when_target_is_reached(monkeypatch, tmp_path):
+    FakeSMTP.sent.clear()
+    monkeypatch.setenv("ALERT_SMTP_USER", "sender@example.com")
+    monkeypatch.setenv("ALERT_SMTP_APP_PASSWORD", "secret")
+    monkeypatch.setattr("free_fund.alerts.smtplib.SMTP", FakeSMTP)
+    state = tmp_path / "alert_state.json"
+    manager = AlertManager(enabled=True, email_to="recipient@example.com", state_path=state)
+
+    assert manager.notify_position_changes("run-1", {"SPY": 0.25}, {"SPY": 100.0})
+    assert manager.notify_position_changes("run-2", {"SPY": 0.25}, {"SPY": 104.1})
+    assert "OBIETTIVO raggiunto" in FakeSMTP.sent[-1].get_content()
+    assert json.loads(state.read_text())["model_positions"] == {}
 
 
 def test_live_advisor_config_preserves_long_only():
