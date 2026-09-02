@@ -348,7 +348,7 @@ class AlertManager:
         if not changes:
             return False
         body = (
-            "Ciao Giulia, ecco il controllo del portafoglio modello.\n\n"
+            "Ciao, ecco il controllo del portafoglio modello.\n\n"
             + "\n\n".join(changes) +
             "\n\nIl bot non esegue ordini. Controlla sempre il prezzo prima di agire. "
             "Niente leva, vendite allo scoperto o criptovalute. "
