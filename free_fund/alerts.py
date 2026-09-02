@@ -88,10 +88,16 @@ class AlertManager:
 
     def _load_state(self) -> dict[str, Any]:
         if self.state_path is None or not self.state_path.exists():
-            return {"target_weights": {}, "model_positions": {}, "last_summary_date": ""}
+            return {
+                "state_version": 1,
+                "target_weights": {},
+                "model_positions": {},
+                "last_summary_date": "",
+            }
         try:
             raw = json.loads(self.state_path.read_text(encoding="utf-8"))
             return {
+                "state_version": int(raw.get("state_version", 1)),
                 "target_weights": {
                     str(k): float(v) for k, v in raw.get("target_weights", {}).items()
                 },
@@ -99,7 +105,12 @@ class AlertManager:
                 "last_summary_date": str(raw.get("last_summary_date", "")),
             }
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
-            return {"target_weights": {}, "model_positions": {}, "last_summary_date": ""}
+            return {
+                "state_version": 1,
+                "target_weights": {},
+                "model_positions": {},
+                "last_summary_date": "",
+            }
 
     def _save_state(
         self,
@@ -114,6 +125,7 @@ class AlertManager:
         self.state_path.write_text(
             json.dumps(
                 {
+                    "state_version": 2,
                     "run_id": run_id,
                     "target_weights": weights,
                     "model_positions": positions,
@@ -135,7 +147,9 @@ class AlertManager:
         if not self.enabled:
             return False
         state = self._load_state()
-        previous = state["target_weights"]
+        # Version 1 only remembered weights. Rebuild model positions once at
+        # current prices, then version 2 distinguishes an intentional exit.
+        previous = {} if state["state_version"] < 2 else state["target_weights"]
         positions: dict[str, dict[str, Any]] = state["model_positions"]
         changes: list[str] = []
         exited_symbols: set[str] = set()

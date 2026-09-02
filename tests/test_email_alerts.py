@@ -103,6 +103,21 @@ def test_model_position_alerts_when_target_is_reached(monkeypatch, tmp_path):
     assert json.loads(state.read_text())["model_positions"] == {}
 
 
+def test_legacy_weight_state_rebuilds_model_position(monkeypatch, tmp_path):
+    FakeSMTP.sent.clear()
+    monkeypatch.setenv("ALERT_SMTP_USER", "sender@example.com")
+    monkeypatch.setenv("ALERT_SMTP_APP_PASSWORD", "secret")
+    monkeypatch.setattr("free_fund.alerts.smtplib.SMTP", FakeSMTP)
+    state = tmp_path / "alert_state.json"
+    state.write_text(json.dumps({"target_weights": {"SPY": 0.25}}))
+    manager = AlertManager(enabled=True, email_to="recipient@example.com", state_path=state)
+
+    assert manager.notify_position_changes("migration", {"SPY": 0.25}, {"SPY": 100.0})
+    saved = json.loads(state.read_text())
+    assert saved["state_version"] == 2
+    assert saved["model_positions"]["SPY"]["entry_price"] == 100.0
+
+
 def test_live_advisor_config_preserves_long_only():
     config = load_config("configs/live_stub.yaml")
 
