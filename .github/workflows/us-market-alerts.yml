@@ -38,7 +38,7 @@ jobs:
             exit 0
           fi
           hour=$(TZ=Europe/Rome date +%H)
-          if [ "$hour" -ge 9 ] && [ "$hour" -lt 18 ]; then
+          if [ "$hour" -ge 9 ] && [ "$hour" -le 18 ]; then
             echo "active=true" >> "$GITHUB_OUTPUT"
           else
             echo "active=false" >> "$GITHUB_OUTPUT"

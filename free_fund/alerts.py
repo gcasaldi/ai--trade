@@ -317,9 +317,14 @@ class AlertManager:
 
         now_italy = datetime.now(timezone.utc).astimezone()
         today = now_italy.date().isoformat()
-        summary_period = "chiusura" if now_italy.hour >= 17 else "mattina"
+        summary_period = "sera" if now_italy.hour >= 18 else "mattina"
         summary_slot = f"{today}:{summary_period}"
-        if not changes and state["last_summary_slot"] != summary_slot:
+        # Add a quiet morning check-in when there is no trade. The evening
+        # report is always complete, even if the same cycle has an action.
+        should_add_summary = state["last_summary_slot"] != summary_slot and (
+            not changes or summary_period == "sera"
+        )
+        if should_add_summary:
             if positions:
                 open_net_total = 0.0
                 for symbol, position in sorted(positions.items()):
@@ -357,7 +362,7 @@ class AlertManager:
         greeting = (
             "Buongiorno. Ho controllato il mercato: ecco cosa farei oggi."
             if summary_period == "mattina"
-            else "Ciao. Ho ricontrollato il mercato: questa e la situazione."
+            else "Buonasera. Ecco il report completo di oggi."
         )
         body = (
             greeting + "\n\n"
