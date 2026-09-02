@@ -17,6 +17,17 @@ def main() -> None:
     cfg = load_config(args.config)
     decision = CentralizedHedgeFundSystem(cfg).run_cycle(execute=not args.dry_run)
 
+    portfolio = cfg.get("portfolio", {})
+    if portfolio.get("long_only", False):
+        tolerance = 1e-9
+        max_weight = float(portfolio.get("max_weight", 1.0))
+        gross_limit = float(portfolio.get("gross_limit", 1.0))
+        weights = [float(value) for value in decision.target_weights.values()]
+        if any(value < -tolerance or value > max_weight + tolerance for value in weights):
+            raise RuntimeError("Unsafe advisor output: position violates long-only/max-weight limits")
+        if sum(weights) > gross_limit + tolerance:
+            raise RuntimeError("Unsafe advisor output: gross exposure exceeds configured limit")
+
     print(f'run_id: {decision.run_id}')
     print('weights:')
     for symbol, weight in decision.target_weights.items():

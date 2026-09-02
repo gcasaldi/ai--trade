@@ -736,12 +736,13 @@ class CentralizedHedgeFundSystem:
         _dbg("post_execution_controls", final_weights)
 
         if self.cfg.get("portfolio", {}).get("long_only", False):
-            final_weights = final_weights.clip(lower=0.0)
+            max_position = float(self.cfg.get("portfolio", {}).get("max_weight", 1.0))
+            final_weights = final_weights.clip(lower=0.0, upper=max_position)
             gross = float(final_weights.sum())
             target_gross = float(self.cfg.get("portfolio", {}).get("gross_limit", 1.0))
-            if gross > 1e-12:
-                final_weights = final_weights / gross * min(target_gross, gross)
-                risk_flags = risk_flags + ["long_only_enforced_post_controls"]
+            if gross > target_gross and gross > 1e-12:
+                final_weights = final_weights / gross * target_gross
+            risk_flags = risk_flags + ["long_only_enforced_post_controls"]
 
         self._last_final_weights = final_weights.copy()
         self._cycle_count += 1
