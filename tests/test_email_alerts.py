@@ -40,14 +40,14 @@ def test_position_email_is_classified_and_deduplicated(monkeypatch, tmp_path):
 
     assert manager.notify_position_changes("run-1", {"SPY": 0.30}, {"SPY": 101.5})
     assert "COMPRA" in FakeSMTP.sent[-1].get_content()
-    assert "ingresso 101.25-101.75" in FakeSMTP.sent[-1].get_content()
-    assert "stop 99.47" in FakeSMTP.sent[-1].get_content()
-    assert "obiettivo 105.56" in FakeSMTP.sent[-1].get_content()
+    assert "Compra solo tra 101.25 e 101.75" in FakeSMTP.sent[-1].get_content()
+    assert "se scende a 99.47" in FakeSMTP.sent[-1].get_content()
+    assert "se sale a 105.56" in FakeSMTP.sent[-1].get_content()
     assert not manager.notify_position_changes("run-2", {"SPY": 0.30}, {"SPY": 102.0})
     assert len(FakeSMTP.sent) == 1
 
     assert manager.notify_position_changes("run-3", {"SPY": 0.0}, {"SPY": 99.0})
-    assert "CHIUDI" in FakeSMTP.sent[-1].get_content()
+    assert "VENDI TUTTO" in FakeSMTP.sent[-1].get_content()
     assert json.loads(state.read_text())["target_weights"]["SPY"] == 0.0
     assert json.loads(state.read_text())["model_positions"] == {}
 
@@ -99,7 +99,7 @@ def test_model_position_alerts_when_target_is_reached(monkeypatch, tmp_path):
 
     assert manager.notify_position_changes("run-1", {"SPY": 0.25}, {"SPY": 100.0})
     assert manager.notify_position_changes("run-2", {"SPY": 0.25}, {"SPY": 104.1})
-    assert "OBIETTIVO raggiunto" in FakeSMTP.sent[-1].get_content()
+    assert "ha raggiunto l'obiettivo di guadagno" in FakeSMTP.sent[-1].get_content()
     assert json.loads(state.read_text())["model_positions"] == {}
 
 

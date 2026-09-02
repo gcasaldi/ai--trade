@@ -90,29 +90,23 @@ jobs:
             exit 1
           fi
 
-      - name: Telegram smoke test (manual runs)
+      - name: Telegram message preview (manual runs)
         if: ${{ steps.advisory_hours.outputs.active == 'true' && github.event_name == 'workflow_dispatch' && inputs.telegram_smoke_test }}
         env:
           ALERT_TELEGRAM_BOT_TOKEN: ${{ secrets.ALERT_TELEGRAM_BOT_TOKEN }}
           ALERT_TELEGRAM_CHAT_ID: ${{ secrets.ALERT_TELEGRAM_CHAT_ID }}
         run: |
           uv run python - <<'PY'
-          import os
-          import requests
+          from free_fund.alerts import AlertManager
 
-          token = os.environ["ALERT_TELEGRAM_BOT_TOKEN"].strip()
-          chat_id = os.environ["ALERT_TELEGRAM_CHAT_ID"].strip()
-          text = "[AI Hedge Fund] Telegram smoke test from GitHub Actions"
-          response = requests.post(
-              f"https://api.telegram.org/bot{token}/sendMessage",
-              json={"chat_id": chat_id, "text": text},
-              timeout=10,
+          sent = AlertManager(enabled=True, reference_capital=100.0).notify_position_changes(
+              run_id="message-preview",
+              target_weights={"SPY": 0.25},
+              latest_prices={"SPY": 100.0},
           )
-          response.raise_for_status()
-          payload = response.json()
-          if not payload.get("ok", False):
-              raise SystemExit(f"Telegram API returned not ok: {payload}")
-          print("Telegram smoke test sent successfully.")
+          if not sent:
+              raise SystemExit("Telegram message preview was not delivered")
+          print("Telegram message preview sent successfully.")
           PY
 
       - name: Restore alert history

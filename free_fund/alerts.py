@@ -165,13 +165,17 @@ class AlertManager:
             target = float(position["target_price"])
             if price <= stop:
                 changes.append(
-                    f"CHIUDI   {symbol:6} | STOP raggiunto | ingresso {entry:.2f} | prezzo {price:.2f}"
+                    f"AZIONE: VENDI TUTTO {symbol}\n"
+                    f"Motivo: il prezzo e sceso al limite di sicurezza.\n"
+                    f"Prezzo di ingresso del modello: {entry:.2f}\nPrezzo osservato: {price:.2f}"
                 )
                 exited_symbols.add(symbol)
                 del positions[symbol]
             elif price >= target:
                 changes.append(
-                    f"CHIUDI   {symbol:6} | OBIETTIVO raggiunto | ingresso {entry:.2f} | prezzo {price:.2f}"
+                    f"AZIONE: VENDI TUTTO {symbol}\n"
+                    f"Motivo: il prezzo ha raggiunto l'obiettivo di guadagno.\n"
+                    f"Prezzo di ingresso del modello: {entry:.2f}\nPrezzo osservato: {price:.2f}"
                 )
                 exited_symbols.add(symbol)
                 del positions[symbol]
@@ -186,26 +190,33 @@ class AlertManager:
             if abs(old) < threshold and abs(new) >= threshold:
                 action = "COMPRA" if new > 0 else "NESSUNA OPERAZIONE"
             elif abs(new) < threshold:
-                action = "CHIUDI"
+                action = "VENDI TUTTO"
             elif old * new < 0:
-                action = "COMPRA" if new > 0 else "CHIUDI"
+                action = "COMPRA" if new > 0 else "VENDI TUTTO"
             elif abs(new) > abs(old):
-                action = "AUMENTA"
+                action = "COMPRA ANCORA"
             else:
-                action = "RIDUCI"
+                action = "VENDI UNA PARTE"
             price = float(prices[symbol]) if symbol in prices else None
             amount = max(0.0, new) * max(0.0, float(self.reference_capital))
-            line = f"{action:8} {symbol:6} | peso {old:.1%} -> {new:.1%} | circa EUR {amount:.2f}"
+            line = f"AZIONE: {action} {symbol}\n"
+            if action in {"COMPRA", "COMPRA ANCORA"}:
+                line += f"Investi in totale circa EUR {amount:.2f}."
+            elif action == "VENDI UNA PARTE":
+                line += f"Dopo la vendita lascia investiti circa EUR {amount:.2f}."
+            else:
+                line += "Vendi tutta la posizione indicata dal modello."
             if price is not None:
-                line += f" | prezzo {price:.2f}"
-                if action in {"COMPRA", "AUMENTA"} and new > 0:
+                line += f"\nPrezzo osservato: {price:.2f}"
+                if action in {"COMPRA", "COMPRA ANCORA"} and new > 0:
                     stop = price * (1.0 - max(0.0, float(self.stop_loss_pct)))
                     target = price * (1.0 + max(0.0, float(self.take_profit_pct)))
                     entry_low = price * 0.9975
                     entry_high = price * 1.0025
                     line += (
-                        f" | ingresso {entry_low:.2f}-{entry_high:.2f}"
-                        f" | stop {stop:.2f} | obiettivo {target:.2f}"
+                        f"\nCompra solo tra {entry_low:.2f} e {entry_high:.2f}."
+                        f"\nVendi per limitare la perdita se scende a {stop:.2f}."
+                        f"\nValuta di vendere in guadagno se sale a {target:.2f}."
                     )
                     positions[symbol] = {
                         "entry_price": price,
@@ -214,7 +225,7 @@ class AlertManager:
                         "target_weight": new,
                         "opened_run_id": run_id,
                     }
-            if action == "CHIUDI":
+            if action == "VENDI TUTTO":
                 positions.pop(symbol, None)
             changes.append(line)
 
@@ -226,20 +237,22 @@ class AlertManager:
                     entry = float(position["entry_price"])
                     pnl = (price / entry - 1.0) if entry > 0 else 0.0
                     changes.append(
-                        f"MANTIENI {symbol:6} | ingresso {entry:.2f} | prezzo {price:.2f}"
-                        f" | andamento {pnl:+.1%} | stop {float(position['stop_price']):.2f}"
-                        f" | obiettivo {float(position['target_price']):.2f}"
+                        f"AZIONE: MANTIENI {symbol}\n"
+                        f"Prezzo di ingresso del modello: {entry:.2f}\n"
+                        f"Prezzo osservato: {price:.2f}\n"
+                        f"Guadagno o perdita dal prezzo di ingresso: {pnl:+.1%}\n"
+                        f"Vendi per limitare la perdita se scende a {float(position['stop_price']):.2f}.\n"
+                        f"Valuta di vendere in guadagno se sale a {float(position['target_price']):.2f}."
                     )
             else:
-                changes.append("ATTENDI | nessuna nuova posizione modello da aprire oggi")
+                changes.append("AZIONE: ATTENDI\nOggi il modello non vede un nuovo acquisto da fare.")
 
         if not changes:
             return False
         body = (
-            "Aggiornamento del consulente automatico (nessun ordine eseguito).\n"
-            f"Run: {run_id}\n\n" + "\n".join(changes) +
-            "\n\nPortafoglio long-only, senza leva e senza crypto. "
-            "I livelli sono indicativi: verifica prezzo e valuta il rischio prima di agire."
+            "Indicazioni del portafoglio modello\n\n" + "\n\n".join(changes) +
+            "\n\nIl bot non esegue ordini. Controlla sempre il prezzo prima di agire. "
+            "Niente leva, vendite allo scoperto o criptovalute."
         )
         sent = self._send_telegram(body)
         sent = self._send_email("[AI Hedge Fund] Segnale apri/chiudi posizioni", body) or sent
