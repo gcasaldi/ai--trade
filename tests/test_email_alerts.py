@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from free_fund.alerts import AlertManager
+from free_fund.config import load_config
 
 
 class FakeSMTP:
@@ -84,3 +85,11 @@ def test_telegram_delivery_works_without_email(monkeypatch, tmp_path):
     assert calls[0][1]["chat_id"] == "12345"
     assert "COMPRA" in calls[0][1]["text"]
     assert state.exists()
+
+
+def test_live_advisor_config_preserves_long_only():
+    config = load_config("configs/live_stub.yaml")
+
+    assert config["portfolio"]["long_only"] is True
+    assert config["portfolio"]["max_weight"] == 0.25
+    assert config["portfolio"]["gross_limit"] == 0.75

@@ -29,6 +29,7 @@ class PortfolioConfig(BaseModel):
     lookback_days: int = 126
     max_weight: float = 0.30
     gross_limit: float = 1.0
+    long_only: bool = False
     rebalance_every_n_days: int = 21
 
 
@@ -93,4 +94,3 @@ def load_config(path: str | Path) -> dict[str, Any]:
     """
     settings = load_settings(path)
     return settings.model_dump(mode="python")
-
