@@ -6,8 +6,9 @@ portfolio:
   start_date: '2020-01-01'
   end_date: null
   lookback_days: 126
-  max_weight: 0.30
-  gross_limit: 1.00
+  max_weight: 0.25
+  gross_limit: 0.75
+  long_only: true
   rebalance_every_n_days: 21
 
 costs:
@@ -155,6 +156,9 @@ alerts:
   smtp_host: smtp.gmail.com
   smtp_port: 587
   min_weight_change: 0.02
+  reference_capital: 100.00
+  stop_loss_pct: 0.02
+  take_profit_pct: 0.04
   thresholds:
     daily_pnl_drift: 0.03
     strategy_disagreement: 0.70

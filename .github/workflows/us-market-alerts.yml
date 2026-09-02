@@ -9,8 +9,8 @@ on:
         default: false
         type: boolean
   schedule:
-    # 22:15 UTC is after the regular US close throughout daylight-saving changes.
-    - cron: "15 22 * * 1-5"
+    # Hourly coverage for 09:00-18:00 Europe/Rome across DST changes.
+    - cron: "0 7-17 * * 1-5"
 
 concurrency:
   group: us-market-telegram-alerts
@@ -27,18 +27,37 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check advisory hours
+        id: advisory_hours
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "active=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          hour=$(TZ=Europe/Rome date +%H)
+          if [ "$hour" -ge 9 ] && [ "$hour" -lt 18 ]; then
+            echo "active=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "active=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Python
+        if: steps.advisory_hours.outputs.active == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Install uv
+        if: steps.advisory_hours.outputs.active == 'true'
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
+        if: steps.advisory_hours.outputs.active == 'true'
         run: uv sync
 
       - name: Validate Telegram secrets
+        if: steps.advisory_hours.outputs.active == 'true'
         env:
           ALERT_TELEGRAM_BOT_TOKEN: ${{ secrets.ALERT_TELEGRAM_BOT_TOKEN }}
           ALERT_TELEGRAM_CHAT_ID: ${{ secrets.ALERT_TELEGRAM_CHAT_ID }}
@@ -49,7 +68,7 @@ jobs:
           fi
 
       - name: Telegram smoke test (manual runs)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.telegram_smoke_test }}
+        if: ${{ steps.advisory_hours.outputs.active == 'true' && github.event_name == 'workflow_dispatch' && inputs.telegram_smoke_test }}
         env:
           ALERT_TELEGRAM_BOT_TOKEN: ${{ secrets.ALERT_TELEGRAM_BOT_TOKEN }}
           ALERT_TELEGRAM_CHAT_ID: ${{ secrets.ALERT_TELEGRAM_CHAT_ID }}
@@ -74,6 +93,7 @@ jobs:
           PY
 
       - name: Restore alert history
+        if: steps.advisory_hours.outputs.active == 'true'
         uses: actions/cache@v4
         with:
           path: outputs/alert_state.json
@@ -82,6 +102,7 @@ jobs:
             telegram-alert-state-
 
       - name: Analyze market and send Telegram alerts
+        if: steps.advisory_hours.outputs.active == 'true'
         env:
           ALERT_TELEGRAM_BOT_TOKEN: ${{ secrets.ALERT_TELEGRAM_BOT_TOKEN }}
           ALERT_TELEGRAM_CHAT_ID: ${{ secrets.ALERT_TELEGRAM_CHAT_ID }}

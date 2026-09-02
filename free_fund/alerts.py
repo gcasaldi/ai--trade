@@ -26,6 +26,9 @@ class AlertManager:
     telegram_chat_id_env: str = "ALERT_TELEGRAM_CHAT_ID"
     state_path: Path | None = None
     min_weight_change: float = 0.02
+    reference_capital: float = 100.0
+    stop_loss_pct: float = 0.02
+    take_profit_pct: float = 0.04
 
     def _send_email(self, subject: str, body: str) -> bool:
         recipient = self.email_to.strip()
@@ -119,24 +122,33 @@ class AlertManager:
             if abs(new - old) < threshold:
                 continue
             if abs(old) < threshold and abs(new) >= threshold:
-                action = "APRI LONG" if new > 0 else "APRI SHORT"
+                action = "COMPRA" if new > 0 else "NESSUNA OPERAZIONE"
             elif abs(new) < threshold:
                 action = "CHIUDI"
             elif old * new < 0:
-                action = "INVERTI LONG" if new > 0 else "INVERTI SHORT"
+                action = "COMPRA" if new > 0 else "CHIUDI"
             elif abs(new) > abs(old):
                 action = "AUMENTA"
             else:
                 action = "RIDUCI"
-            price_text = f" | prezzo indicativo {prices[symbol]:.2f}" if symbol in prices else ""
-            changes.append(f"{action:12} {symbol:8} {old:+.1%} -> {new:+.1%}{price_text}")
+            price = float(prices[symbol]) if symbol in prices else None
+            amount = max(0.0, new) * max(0.0, float(self.reference_capital))
+            line = f"{action:8} {symbol:6} | peso {old:.1%} -> {new:.1%} | circa EUR {amount:.2f}"
+            if price is not None:
+                line += f" | prezzo {price:.2f}"
+                if action in {"COMPRA", "AUMENTA"} and new > 0:
+                    stop = price * (1.0 - max(0.0, float(self.stop_loss_pct)))
+                    target = price * (1.0 + max(0.0, float(self.take_profit_pct)))
+                    line += f" | stop {stop:.2f} | obiettivo {target:.2f}"
+            changes.append(line)
 
         if not changes:
             return False
         body = (
-            "Segnale di ribilanciamento (paper trading, non consulenza finanziaria).\n"
+            "Aggiornamento del consulente automatico (nessun ordine eseguito).\n"
             f"Run: {run_id}\n\n" + "\n".join(changes) +
-            "\n\nVerifica prezzi, liquidita e rischio prima di qualunque operazione."
+            "\n\nPortafoglio long-only, senza leva e senza crypto. "
+            "I livelli sono indicativi: verifica prezzo e valuta il rischio prima di agire."
         )
         sent = self._send_telegram(body)
         sent = self._send_email("[AI Hedge Fund] Segnale apri/chiudi posizioni", body) or sent

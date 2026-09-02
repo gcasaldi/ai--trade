@@ -38,7 +38,9 @@ def test_position_email_is_classified_and_deduplicated(monkeypatch, tmp_path):
     manager = AlertManager(enabled=True, email_to="recipient@example.com", state_path=state)
 
     assert manager.notify_position_changes("run-1", {"SPY": 0.30}, {"SPY": 101.5})
-    assert "APRI LONG" in FakeSMTP.sent[-1].get_content()
+    assert "COMPRA" in FakeSMTP.sent[-1].get_content()
+    assert "stop 99.47" in FakeSMTP.sent[-1].get_content()
+    assert "obiettivo 105.56" in FakeSMTP.sent[-1].get_content()
     assert not manager.notify_position_changes("run-2", {"SPY": 0.30}, {"SPY": 102.0})
     assert len(FakeSMTP.sent) == 1
 
@@ -80,5 +82,5 @@ def test_telegram_delivery_works_without_email(monkeypatch, tmp_path):
     assert manager.notify_position_changes("run-1", {"SPY": 0.30})
     assert calls[0][0].endswith("/sendMessage")
     assert calls[0][1]["chat_id"] == "12345"
-    assert "APRI LONG" in calls[0][1]["text"]
+    assert "COMPRA" in calls[0][1]["text"]
     assert state.exists()

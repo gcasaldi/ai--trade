@@ -75,6 +75,9 @@ class CentralizedHedgeFundSystem:
             smtp_port=int(alert_cfg.get("smtp_port", 587)),
             state_path=self.out_dir / "alert_state.json",
             min_weight_change=float(alert_cfg.get("min_weight_change", 0.02)),
+            reference_capital=float(alert_cfg.get("reference_capital", 100.0)),
+            stop_loss_pct=float(alert_cfg.get("stop_loss_pct", 0.02)),
+            take_profit_pct=float(alert_cfg.get("take_profit_pct", 0.04)),
         )
         self.tracer = TraceLMLogger(
             enabled=bool(self.cfg.get("tracing", {}).get("enabled", True)),
