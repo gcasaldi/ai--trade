@@ -255,11 +255,17 @@ class AlertManager:
             amount = max(0.0, new) * max(0.0, float(self.reference_capital))
             line = f"AZIONE: {action} {symbol}\n"
             if action in {"COMPRA", "COMPRA ANCORA"}:
-                line += f"Investi in totale circa EUR {amount:.2f}."
+                line += (
+                    f"Secondo il modello oggi possiamo entrare con prudenza. "
+                    f"Investi in totale circa EUR {amount:.2f}."
+                )
             elif action == "VENDI UNA PARTE":
-                line += f"Dopo la vendita lascia investiti circa EUR {amount:.2f}."
+                line += (
+                    f"Riduciamo un po' il rischio. Dopo la vendita lascia investiti "
+                    f"circa EUR {amount:.2f}."
+                )
             else:
-                line += "Vendi tutta la posizione indicata dal modello."
+                line += "Per prudenza chiudiamo tutta la posizione indicata dal modello."
             if price is not None:
                 line += f"\nPrezzo osservato: {price:.2f}"
                 if action in {"COMPRA", "COMPRA ANCORA"} and new > 0:
@@ -327,6 +333,7 @@ class AlertManager:
                     open_net_total += open_net
                     changes.append(
                         f"AZIONE: MANTIENI {symbol}\n"
+                        f"Per ora non cambierei nulla. Teniamo questa posizione sotto controllo.\n"
                         f"Prezzo di ingresso del modello: {entry:.2f}\n"
                         f"Prezzo osservato: {price:.2f}\n"
                         f"Guadagno o perdita dal prezzo di ingresso: {pnl:+.1%}\n"
@@ -347,8 +354,13 @@ class AlertManager:
 
         if not changes:
             return False
+        greeting = (
+            "Buongiorno. Ho controllato il mercato: ecco cosa farei oggi."
+            if summary_period == "mattina"
+            else "Ciao. Ho ricontrollato il mercato: questa e la situazione."
+        )
         body = (
-            "Ciao, ecco il controllo del portafoglio modello.\n\n"
+            greeting + "\n\n"
             + "\n\n".join(changes) +
             "\n\nIl bot non esegue ordini. Controlla sempre il prezzo prima di agire. "
             "Niente leva, vendite allo scoperto o criptovalute. "
