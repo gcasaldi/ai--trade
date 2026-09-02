@@ -56,6 +56,26 @@ jobs:
         if: steps.advisory_hours.outputs.active == 'true'
         run: uv sync
 
+      - name: Validate conservative advisor configuration
+        if: steps.advisory_hours.outputs.active == 'true'
+        run: |
+          uv run python - <<'PY'
+          from free_fund.config import load_config
+
+          portfolio = load_config("configs/live_stub.yaml")["portfolio"]
+          print({
+              "long_only": portfolio.get("long_only"),
+              "max_weight": portfolio.get("max_weight"),
+              "gross_limit": portfolio.get("gross_limit"),
+          })
+          if portfolio.get("long_only") is not True:
+              raise SystemExit("Safety check failed: advisor must be long-only")
+          if float(portfolio.get("max_weight", 1.0)) > 0.25:
+              raise SystemExit("Safety check failed: max weight exceeds 25%")
+          if float(portfolio.get("gross_limit", 1.0)) > 0.75:
+              raise SystemExit("Safety check failed: gross exposure exceeds 75%")
+          PY
+
       - name: Validate Telegram secrets
         if: steps.advisory_hours.outputs.active == 'true'
         env:
