@@ -62,7 +62,8 @@ jobs:
           uv run python - <<'PY'
           from free_fund.config import load_config
 
-          portfolio = load_config("configs/live_stub.yaml")["portfolio"]
+          config = load_config("configs/live_stub.yaml")
+          portfolio = config["portfolio"]
           print({
               "long_only": portfolio.get("long_only"),
               "max_weight": portfolio.get("max_weight"),
@@ -74,6 +75,8 @@ jobs:
               raise SystemExit("Safety check failed: max weight exceeds 25%")
           if float(portfolio.get("gross_limit", 1.0)) > 0.75:
               raise SystemExit("Safety check failed: gross exposure exceeds 75%")
+          if config.get("runtime", {}).get("pipeline_mode") is not False:
+              raise SystemExit("Safety check failed: full safety orchestrator is required")
           PY
 
       - name: Validate Telegram secrets

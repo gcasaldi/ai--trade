@@ -1,6 +1,10 @@
 system:
   output_dir: outputs
 
+runtime:
+  # Use the full orchestrator: it enforces long-only and sends advisory alerts.
+  pipeline_mode: false
+
 portfolio:
   symbols: [SPY, QQQ, IWM, TLT, GLD]
   start_date: '2020-01-01'

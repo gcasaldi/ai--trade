@@ -93,3 +93,4 @@ def test_live_advisor_config_preserves_long_only():
     assert config["portfolio"]["long_only"] is True
     assert config["portfolio"]["max_weight"] == 0.25
     assert config["portfolio"]["gross_limit"] == 0.75
+    assert config["runtime"]["pipeline_mode"] is False
