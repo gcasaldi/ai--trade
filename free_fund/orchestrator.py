@@ -795,7 +795,7 @@ class CentralizedHedgeFundSystem:
             json.dumps(decision.to_dict(), indent=2, sort_keys=True),
             encoding="utf-8",
         )
-        self.alerts.notify_position_changes(
+        self.last_position_alert_sent = self.alerts.notify_position_changes(
             run_id=run_id,
             target_weights=decision.target_weights,
             latest_prices={k: float(v) for k, v in prices.iloc[-1].to_dict().items()},

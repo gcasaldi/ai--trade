@@ -125,4 +125,11 @@ jobs:
         env:
           ALERT_TELEGRAM_BOT_TOKEN: ${{ secrets.ALERT_TELEGRAM_BOT_TOKEN }}
           ALERT_TELEGRAM_CHAT_ID: ${{ secrets.ALERT_TELEGRAM_CHAT_ID }}
-        run: uv run python scripts/run_daily.py --config configs/live_stub.yaml --dry-run
+        shell: bash
+        run: |
+          require_alert=""
+          hour=$(date +%H)
+          if [ "${{ github.event_name }}" = "schedule" ] && { [ "$hour" -eq 9 ] || [ "$hour" -eq 18 ]; }; then
+            require_alert="--require-alert"
+          fi
+          uv run python scripts/run_daily.py --config configs/live_stub.yaml --dry-run $require_alert

@@ -11,11 +11,19 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', default='configs/default.yaml')
     parser.add_argument('--dry-run', action='store_true', help='Skip broker order submission.')
+    parser.add_argument(
+        '--require-alert',
+        action='store_true',
+        help='Fail when this cycle does not deliver its expected advisory message.',
+    )
     args = parser.parse_args()
 
     load_dotenv_file()
     cfg = load_config(args.config)
-    decision = CentralizedHedgeFundSystem(cfg).run_cycle(execute=not args.dry_run)
+    system = CentralizedHedgeFundSystem(cfg)
+    decision = system.run_cycle(execute=not args.dry_run)
+    if args.require_alert and not getattr(system, 'last_position_alert_sent', False):
+        raise RuntimeError('The expected Telegram advisory message was not delivered')
 
     portfolio = cfg.get("portfolio", {})
     if portfolio.get("long_only", False):

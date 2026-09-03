@@ -54,7 +54,8 @@ microstructure:
   enabled: true
 
 research_council:
-  enabled: true
+  # Cloud Actions has no local Ollama service; deterministic agents remain active.
+  enabled: false
   blend_weight: 0.10
   max_rounds: 1
   request_timeout_sec: 90
