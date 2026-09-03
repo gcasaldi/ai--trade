@@ -40,6 +40,7 @@ def test_position_email_is_classified_and_deduplicated(monkeypatch, tmp_path):
 
     assert manager.notify_position_changes("run-1", {"SPY": 0.30}, {"SPY": 101.5})
     assert "COMPRA" in FakeSMTP.sent[-1].get_content()
+    assert "SPY (SPDR S&P 500 ETF Trust)" in FakeSMTP.sent[-1].get_content()
     assert "Compra solo tra 101.25 e 101.75" in FakeSMTP.sent[-1].get_content()
     assert "se scende a 99.47" in FakeSMTP.sent[-1].get_content()
     assert "se sale a 105.56" in FakeSMTP.sent[-1].get_content()

@@ -12,6 +12,19 @@ from datetime import datetime, timezone
 
 import requests
 
+ASSET_NAMES = {
+    "SPY": "SPDR S&P 500 ETF Trust",
+    "QQQ": "Invesco QQQ Trust - Nasdaq 100",
+    "IWM": "iShares Russell 2000 ETF",
+    "TLT": "iShares 20+ Year Treasury Bond ETF",
+    "GLD": "SPDR Gold Shares",
+}
+
+
+def asset_label(symbol: str) -> str:
+    name = ASSET_NAMES.get(symbol.upper())
+    return f"{symbol} ({name})" if name else symbol
+
 
 @dataclass
 class AlertManager:
@@ -210,7 +223,7 @@ class AlertManager:
                 )
                 gross, tax, net = self._record_sale(ledger, invested, entry, price)
                 changes.append(
-                    f"AZIONE: VENDI TUTTO {symbol}\n"
+                    f"AZIONE: VENDI TUTTO {asset_label(symbol)}\n"
                     f"Motivo: il prezzo e sceso al limite di sicurezza.\n"
                     f"Prezzo di ingresso del modello: {entry:.2f}\nPrezzo osservato: {price:.2f}"
                     + self._sale_result_text(gross, tax, net, ledger)
@@ -226,7 +239,7 @@ class AlertManager:
                 )
                 gross, tax, net = self._record_sale(ledger, invested, entry, price)
                 changes.append(
-                    f"AZIONE: VENDI TUTTO {symbol}\n"
+                    f"AZIONE: VENDI TUTTO {asset_label(symbol)}\n"
                     f"Motivo: il prezzo ha raggiunto l'obiettivo di guadagno.\n"
                     f"Prezzo di ingresso del modello: {entry:.2f}\nPrezzo osservato: {price:.2f}"
                     + self._sale_result_text(gross, tax, net, ledger)
@@ -253,7 +266,7 @@ class AlertManager:
                 action = "VENDI UNA PARTE"
             price = float(prices[symbol]) if symbol in prices else None
             amount = max(0.0, new) * max(0.0, float(self.reference_capital))
-            line = f"AZIONE: {action} {symbol}\n"
+            line = f"AZIONE: {action} {asset_label(symbol)}\n"
             if action in {"COMPRA", "COMPRA ANCORA"}:
                 line += (
                     f"Secondo il modello oggi possiamo entrare con prudenza. "
@@ -337,7 +350,7 @@ class AlertManager:
                     open_net = open_gross - open_tax
                     open_net_total += open_net
                     changes.append(
-                        f"AZIONE: MANTIENI {symbol}\n"
+                        f"AZIONE: MANTIENI {asset_label(symbol)}\n"
                         f"Per ora non cambierei nulla. Teniamo questa posizione sotto controllo.\n"
                         f"Prezzo di ingresso del modello: {entry:.2f}\n"
                         f"Prezzo osservato: {price:.2f}\n"
