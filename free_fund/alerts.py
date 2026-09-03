@@ -366,7 +366,7 @@ class AlertManager:
 
         now_italy = datetime.now(timezone.utc).astimezone()
         today = now_italy.date().isoformat()
-        summary_period = "sera" if now_italy.hour >= 18 else "mattina"
+        summary_period = "sera" if now_italy.hour >= 19 else "mattina"
         summary_slot = f"{today}:{summary_period}"
         # Add a quiet morning check-in when there is no trade. The evening
         # report is always complete, even if the same cycle has an action.
