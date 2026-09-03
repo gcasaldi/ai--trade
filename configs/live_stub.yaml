@@ -6,7 +6,9 @@ runtime:
   pipeline_mode: false
 
 portfolio:
-  symbols: [SPY, QQQ, IWM, TLT, GLD]
+  # Liquid listed companies only: no ETFs, funds, crypto, leverage or shorting.
+  instrument_type: equities
+  symbols: [AAPL, MSFT, NVDA, AMZN, GOOGL, META, JPM, JNJ, PG, XOM]
   start_date: '2020-01-01'
   end_date: null
   lookback_days: 126
@@ -78,8 +80,8 @@ private_alpha:
   blend_weight: 0.0
 
 benchmark:
-  mode: symbol
-  symbol: SPY
+  mode: equal_weight
+  symbol: AAPL
   alpha_weight: 0.20
 
 fund_manager:
@@ -88,8 +90,8 @@ fund_manager:
   top_k: 8
 
 regime_controls:
-  defensive_assets: [TLT, GLD]
-  defensive_tilt: 0.06
+  defensive_assets: []
+  defensive_tilt: 0.00
   gross_limit_by_regime:
     trend: 1.00
     meanrev: 0.90

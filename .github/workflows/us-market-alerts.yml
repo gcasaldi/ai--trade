@@ -79,6 +79,12 @@ jobs:
               raise SystemExit("Safety check failed: gross exposure exceeds 75%")
           if config.get("runtime", {}).get("pipeline_mode") is not False:
               raise SystemExit("Safety check failed: full safety orchestrator is required")
+          if portfolio.get("instrument_type") != "equities":
+              raise SystemExit("Safety check failed: live universe must contain equities only")
+          forbidden = {"SPY", "QQQ", "IWM", "TLT", "GLD", "BTC-USD", "ETH-USD"}
+          found = forbidden.intersection(portfolio.get("symbols", []))
+          if found:
+              raise SystemExit(f"Safety check failed: forbidden non-equity symbols: {sorted(found)}")
           PY
 
       - name: Validate Telegram secrets
@@ -89,6 +95,13 @@ jobs:
         run: |
           if [ -z "$ALERT_TELEGRAM_BOT_TOKEN" ] || [ -z "$ALERT_TELEGRAM_CHAT_ID" ]; then
             echo "Missing ALERT_TELEGRAM_BOT_TOKEN or ALERT_TELEGRAM_CHAT_ID in repository secrets."
+            exit 1
+          fi
+          chat_type=$(curl --fail --silent --show-error \
+            "https://api.telegram.org/bot${ALERT_TELEGRAM_BOT_TOKEN}/getChat?chat_id=${ALERT_TELEGRAM_CHAT_ID}" \
+            | jq -r '.result.type // ""')
+          if [ "$chat_type" != "private" ]; then
+            echo "Telegram destination must be the configured private chat."
             exit 1
           fi
 

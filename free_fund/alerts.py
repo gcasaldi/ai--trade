@@ -13,6 +13,16 @@ from datetime import datetime, timezone
 import requests
 
 ASSET_NAMES = {
+    "AAPL": "Apple Inc.",
+    "MSFT": "Microsoft Corporation",
+    "NVDA": "NVIDIA Corporation",
+    "AMZN": "Amazon.com, Inc.",
+    "GOOGL": "Alphabet Inc. - Classe A",
+    "META": "Meta Platforms, Inc. - Classe A",
+    "JPM": "JPMorgan Chase & Co.",
+    "JNJ": "Johnson & Johnson",
+    "PG": "Procter & Gamble Company",
+    "XOM": "Exxon Mobil Corporation",
     "SPY": "SPDR S&P 500 ETF Trust",
     "QQQ": "Invesco QQQ Trust - Nasdaq 100",
     "IWM": "iShares Russell 2000 ETF",
@@ -75,7 +85,7 @@ class AlertManager:
         try:
             response = requests.post(
                 f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id": chat_id, "text": text},
+                json={"chat_id": chat_id, "text": text, "protect_content": True},
                 timeout=self.timeout_sec,
             )
             response.raise_for_status()
