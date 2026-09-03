@@ -142,3 +142,4 @@ def test_live_advisor_config_preserves_long_only():
     assert config["alerts"]["estimated_tax_rate"] == 0.26
     assert config["alerts"]["commission_per_order"] == 1.0
     assert config["alerts"]["minimum_net_profit_pct"] == 0.02
+    assert config["alerts"]["minimum_position_amount"] == 20.0

@@ -81,6 +81,7 @@ class CentralizedHedgeFundSystem:
             estimated_tax_rate=float(alert_cfg.get("estimated_tax_rate", 0.26)),
             commission_per_order=float(alert_cfg.get("commission_per_order", 1.0)),
             minimum_net_profit_pct=float(alert_cfg.get("minimum_net_profit_pct", 0.02)),
+            minimum_position_amount=float(alert_cfg.get("minimum_position_amount", 20.0)),
         )
         self.tracer = TraceLMLogger(
             enabled=bool(self.cfg.get("tracing", {}).get("enabled", True)),

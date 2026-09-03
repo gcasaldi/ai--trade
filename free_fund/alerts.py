@@ -93,6 +93,7 @@ class AlertManager:
     estimated_tax_rate: float = 0.26
     commission_per_order: float = 1.0
     minimum_net_profit_pct: float = 0.02
+    minimum_position_amount: float = 20.0
 
     def _send_email(self, subject: str, body: str) -> bool:
         recipient = self.email_to.strip()
@@ -278,6 +279,16 @@ class AlertManager:
             0.0,
             float(self.reference_capital) + float(ledger.get("realized_net", 0.0)),
         )
+        economical_targets: dict[str, float] = {}
+        for symbol, raw_weight in target_weights.items():
+            weight = max(0.0, float(raw_weight))
+            if 0.0 < weight * model_capital < max(0.0, float(self.minimum_position_amount)):
+                if symbol in positions:
+                    weight = float(state["target_weights"].get(symbol, weight))
+                else:
+                    weight = 0.0
+            economical_targets[symbol] = weight
+        target_weights = economical_targets
         changes: list[str] = []
         exited_symbols: set[str] = set()
         threshold = max(0.0, float(self.min_weight_change))
@@ -475,6 +486,8 @@ class AlertManager:
         body = (
             greeting + "\n\n"
             + "\n\n--------------------\n\n".join(changes) +
+            "\n\nMemoria: questo e un portafoglio modello e presume che tu abbia eseguito "
+            "le indicazioni ricevute. "
             "\n\nNota: prezzi dei titoli in dollari, budget in euro. Il bot non esegue ordini. "
             "Per budget piccoli il broker deve supportare azioni frazionate e conversione valuta. "
             "Niente leva, short o cripto. Tasse al 26% stimate: fa fede il broker."
