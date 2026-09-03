@@ -43,7 +43,7 @@ def test_position_email_is_classified_and_deduplicated(monkeypatch, tmp_path):
     assert "Titolo: SPDR S&P 500 ETF Trust (SPY)" in FakeSMTP.sent[-1].get_content()
     assert "Entra solo tra: USD 101,25 e USD 101,75" in FakeSMTP.sent[-1].get_content()
     assert "se scende a: USD 99,47" in FakeSMTP.sent[-1].get_content()
-    assert "vendita a: USD 105,56" in FakeSMTP.sent[-1].get_content()
+    assert "vendita a: USD 111,01" in FakeSMTP.sent[-1].get_content()
     assert not manager.notify_position_changes("run-2", {"SPY": 0.30}, {"SPY": 102.0})
     assert len(FakeSMTP.sent) == 1
 
@@ -100,14 +100,15 @@ def test_model_position_alerts_when_target_is_reached(monkeypatch, tmp_path):
     manager = AlertManager(enabled=True, email_to="recipient@example.com", state_path=state)
 
     assert manager.notify_position_changes("run-1", {"SPY": 0.25}, {"SPY": 100.0})
-    assert manager.notify_position_changes("run-2", {"SPY": 0.25}, {"SPY": 104.1})
+    assert manager.notify_position_changes("run-2", {"SPY": 0.25}, {"SPY": 111.0})
     assert "ha raggiunto l'obiettivo di guadagno" in FakeSMTP.sent[-1].get_content()
     saved = json.loads(state.read_text())
     assert saved["model_positions"] == {}
-    assert round(saved["ledger"]["realized_gross"], 4) == 1.025
-    assert round(saved["ledger"]["estimated_tax"], 4) == 0.2665
-    assert round(saved["ledger"]["realized_net"], 4) == 0.7585
-    assert "Tasse italiane stimate (26%): EUR 0,27" in FakeSMTP.sent[-1].get_content()
+    assert round(saved["ledger"]["realized_gross"], 4) == 2.75
+    assert saved["ledger"]["commissions"] == 2.0
+    assert round(saved["ledger"]["estimated_tax"], 4) == 0.195
+    assert round(saved["ledger"]["realized_net"], 4) == 0.555
+    assert "Tasse italiane stimate (26%): EUR 0,20" in FakeSMTP.sent[-1].get_content()
 
     assert manager.notify_position_changes("run-3", {"SPY": 0.25}, {"SPY": 103.0})
     assert "COSA FARE: COMPRA" in FakeSMTP.sent[-1].get_content()
@@ -139,3 +140,5 @@ def test_live_advisor_config_preserves_long_only():
     assert len(set(config["portfolio"]["sector_by_symbol"].values())) == 11
     assert config["runtime"]["pipeline_mode"] is False
     assert config["alerts"]["estimated_tax_rate"] == 0.26
+    assert config["alerts"]["commission_per_order"] == 1.0
+    assert config["alerts"]["minimum_net_profit_pct"] == 0.02

@@ -192,6 +192,8 @@ alerts:
   take_profit_pct: 0.04
   # Prudential estimate for Italian capital-gains tax; the broker statement prevails.
   estimated_tax_rate: 0.26
+  commission_per_order: 1.00
+  minimum_net_profit_pct: 0.02
   thresholds:
     daily_pnl_drift: 0.03
     strategy_disagreement: 0.70

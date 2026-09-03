@@ -91,6 +91,8 @@ class AlertManager:
     stop_loss_pct: float = 0.02
     take_profit_pct: float = 0.04
     estimated_tax_rate: float = 0.26
+    commission_per_order: float = 1.0
+    minimum_net_profit_pct: float = 0.02
 
     def _send_email(self, subject: str, body: str) -> bool:
         recipient = self.email_to.strip()
@@ -214,21 +216,44 @@ class AlertManager:
         invested_amount: float,
         entry_price: float,
         sale_price: float,
-    ) -> tuple[float, float, float]:
+        commissions: float,
+    ) -> tuple[float, float, float, float]:
         gross = invested_amount * ((sale_price / entry_price) - 1.0) if entry_price > 0 else 0.0
-        tax = max(0.0, gross) * max(0.0, float(self.estimated_tax_rate))
-        net = gross - tax
+        fees = max(0.0, commissions)
+        taxable_gain = max(0.0, gross - fees)
+        tax = taxable_gain * max(0.0, float(self.estimated_tax_rate))
+        net = gross - fees - tax
         ledger["realized_gross"] = float(ledger.get("realized_gross", 0.0)) + gross
+        ledger["commissions"] = float(ledger.get("commissions", 0.0)) + fees
         ledger["estimated_tax"] = float(ledger.get("estimated_tax", 0.0)) + tax
         ledger["realized_net"] = float(ledger.get("realized_net", 0.0)) + net
         ledger["sales"] = float(ledger.get("sales", 0.0)) + 1.0
-        return gross, tax, net
+        return gross, fees, tax, net
+
+    def _minimum_profitable_target(
+        self,
+        entry_price: float,
+        invested_amount: float,
+        buy_fees: float,
+    ) -> float:
+        future_fees = max(0.0, buy_fees) + max(0.0, float(self.commission_per_order))
+        desired_net = invested_amount * max(0.0, float(self.minimum_net_profit_pct))
+        after_tax_share = max(0.01, 1.0 - max(0.0, float(self.estimated_tax_rate)))
+        required_gain = future_fees + (desired_net / after_tax_share)
+        target_pct = max(
+            max(0.0, float(self.take_profit_pct)),
+            required_gain / invested_amount if invested_amount > 0 else 0.0,
+        )
+        return entry_price * (1.0 + target_pct)
 
     @staticmethod
-    def _sale_result_text(gross: float, tax: float, net: float, ledger: dict[str, float]) -> str:
+    def _sale_result_text(
+        gross: float, fees: float, tax: float, net: float, ledger: dict[str, float]
+    ) -> str:
         return (
             "\n\nRISULTATO STIMATO DELLA VENDITA"
             f"\nPrima delle tasse: {money(gross)}"
+            f"\nCommissioni di acquisto e vendita: {money(fees)}"
             f"\nTasse italiane stimate (26%): {money(tax)}"
             f"\nDopo le tasse stimate: {money(net)}"
             f"\nTotale netto dall'inizio: {money(float(ledger.get('realized_net', 0.0)))}"
@@ -249,6 +274,10 @@ class AlertManager:
         previous = {} if state["state_version"] < 2 else state["target_weights"]
         positions: dict[str, dict[str, Any]] = state["model_positions"]
         ledger: dict[str, float] = state["ledger"]
+        model_capital = max(
+            0.0,
+            float(self.reference_capital) + float(ledger.get("realized_net", 0.0)),
+        )
         changes: list[str] = []
         exited_symbols: set[str] = set()
         threshold = max(0.0, float(self.min_weight_change))
@@ -260,36 +289,42 @@ class AlertManager:
             price = float(prices[symbol])
             entry = float(position["entry_price"])
             stop = float(position["stop_price"])
-            target = float(position["target_price"])
-            if price <= stop:
-                invested = float(
-                    position.get(
-                        "invested_amount",
-                        float(position.get("target_weight", 0.0)) * self.reference_capital,
-                    )
+            invested = float(
+                position.get(
+                    "invested_amount",
+                    float(position.get("target_weight", 0.0)) * self.reference_capital,
                 )
-                gross, tax, net = self._record_sale(ledger, invested, entry, price)
+            )
+            buy_fees = float(position.get("buy_fees", self.commission_per_order))
+            target = max(
+                float(position["target_price"]),
+                self._minimum_profitable_target(entry, invested, buy_fees),
+            )
+            position["target_price"] = target
+            position["buy_fees"] = buy_fees
+            if price <= stop:
+                fees = float(position.get("buy_fees", self.commission_per_order)) + float(
+                    self.commission_per_order
+                )
+                gross, fees, tax, net = self._record_sale(ledger, invested, entry, price, fees)
                 changes.append(
                     f"COSA FARE: VENDI TUTTO\n{asset_details(symbol)}\n"
                     f"Motivo: il prezzo e sceso al limite di sicurezza.\n"
                     f"Prezzo di ingresso: {usd_price(entry)}\nPrezzo attuale: {usd_price(price)}"
-                    + self._sale_result_text(gross, tax, net, ledger)
+                    + self._sale_result_text(gross, fees, tax, net, ledger)
                 )
                 exited_symbols.add(symbol)
                 del positions[symbol]
             elif price >= target:
-                invested = float(
-                    position.get(
-                        "invested_amount",
-                        float(position.get("target_weight", 0.0)) * self.reference_capital,
-                    )
+                fees = float(position.get("buy_fees", self.commission_per_order)) + float(
+                    self.commission_per_order
                 )
-                gross, tax, net = self._record_sale(ledger, invested, entry, price)
+                gross, fees, tax, net = self._record_sale(ledger, invested, entry, price, fees)
                 changes.append(
                     f"COSA FARE: VENDI TUTTO\n{asset_details(symbol)}\n"
                     f"Motivo: il prezzo ha raggiunto l'obiettivo di guadagno.\n"
                     f"Prezzo di ingresso: {usd_price(entry)}\nPrezzo attuale: {usd_price(price)}"
-                    + self._sale_result_text(gross, tax, net, ledger)
+                    + self._sale_result_text(gross, fees, tax, net, ledger)
                 )
                 exited_symbols.add(symbol)
                 del positions[symbol]
@@ -312,7 +347,7 @@ class AlertManager:
             else:
                 action = "VENDI UNA PARTE"
             price = float(prices[symbol]) if symbol in prices else None
-            amount = max(0.0, new) * max(0.0, float(self.reference_capital))
+            amount = max(0.0, new) * model_capital
             line = f"COSA FARE: {action}\n{asset_details(symbol)}\n"
             if action in {"COMPRA", "COMPRA ANCORA"}:
                 line += f"Budget totale suggerito: {money(amount)}"
@@ -325,8 +360,11 @@ class AlertManager:
                 if action in {"COMPRA", "COMPRA ANCORA"} and new > 0:
                     existing = positions.get(symbol, {})
                     existing_amount = float(existing.get("invested_amount", 0.0))
-                    added_amount = max(0.0, new - max(0.0, old)) * self.reference_capital
+                    added_amount = max(0.0, new - max(0.0, old)) * model_capital
                     total_amount = existing_amount + added_amount
+                    existing_buy_fees = float(existing.get("buy_fees", 0.0))
+                    added_buy_fee = float(self.commission_per_order) if added_amount > 0 else 0.0
+                    total_buy_fees = existing_buy_fees + added_buy_fee
                     existing_entry = float(existing.get("entry_price", price))
                     average_entry = (
                         ((existing_entry * existing_amount) + (price * added_amount)) / total_amount
@@ -334,7 +372,11 @@ class AlertManager:
                         else price
                     )
                     stop = average_entry * (1.0 - max(0.0, float(self.stop_loss_pct)))
-                    target = average_entry * (1.0 + max(0.0, float(self.take_profit_pct)))
+                    target = self._minimum_profitable_target(
+                        average_entry,
+                        total_amount,
+                        total_buy_fees,
+                    )
                     entry_low = price * 0.9975
                     entry_high = price * 1.0025
                     line += (
@@ -348,6 +390,7 @@ class AlertManager:
                         "target_price": target,
                         "target_weight": new,
                         "invested_amount": total_amount,
+                        "buy_fees": total_buy_fees,
                         "opened_run_id": run_id,
                     }
                 elif action in {"VENDI UNA PARTE", "VENDI TUTTO"} and symbol in positions:
@@ -356,15 +399,22 @@ class AlertManager:
                     current_amount = float(
                         position.get("invested_amount", max(0.0, old) * self.reference_capital)
                     )
-                    remaining_amount = max(0.0, new) * self.reference_capital
+                    remaining_amount = max(0.0, new) * model_capital
                     sold_amount = current_amount if action == "VENDI TUTTO" else max(
                         0.0, current_amount - remaining_amount
                     )
-                    gross, tax, net = self._record_sale(ledger, sold_amount, entry, price)
-                    line += self._sale_result_text(gross, tax, net, ledger)
+                    current_buy_fees = float(position.get("buy_fees", self.commission_per_order))
+                    sold_fraction = min(1.0, sold_amount / current_amount) if current_amount > 0 else 0.0
+                    allocated_buy_fees = current_buy_fees * sold_fraction
+                    fees = allocated_buy_fees + max(0.0, float(self.commission_per_order))
+                    gross, fees, tax, net = self._record_sale(
+                        ledger, sold_amount, entry, price, fees
+                    )
+                    line += self._sale_result_text(gross, fees, tax, net, ledger)
                     if action == "VENDI UNA PARTE":
                         position["invested_amount"] = remaining_amount
                         position["target_weight"] = new
+                        position["buy_fees"] = current_buy_fees - allocated_buy_fees
             if action == "VENDI TUTTO":
                 positions.pop(symbol, None)
             changes.append(line)
@@ -387,8 +437,13 @@ class AlertManager:
                     pnl = (price / entry - 1.0) if entry > 0 else 0.0
                     invested = float(position.get("invested_amount", 0.0))
                     open_gross = invested * pnl
-                    open_tax = max(0.0, open_gross) * max(0.0, float(self.estimated_tax_rate))
-                    open_net = open_gross - open_tax
+                    estimated_fees = float(position.get("buy_fees", self.commission_per_order)) + max(
+                        0.0, float(self.commission_per_order)
+                    )
+                    open_tax = max(0.0, open_gross - estimated_fees) * max(
+                        0.0, float(self.estimated_tax_rate)
+                    )
+                    open_net = open_gross - estimated_fees - open_tax
                     open_net_total += open_net
                     changes.append(
                         f"COSA FARE: MANTIENI\n{asset_details(symbol)}\n"
