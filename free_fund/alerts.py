@@ -23,6 +23,19 @@ ASSET_NAMES = {
     "JNJ": "Johnson & Johnson",
     "PG": "Procter & Gamble Company",
     "XOM": "Exxon Mobil Corporation",
+    "HD": "Home Depot, Inc.",
+    "KO": "Coca-Cola Company",
+    "V": "Visa Inc. - Classe A",
+    "LLY": "Eli Lilly and Company",
+    "CAT": "Caterpillar Inc.",
+    "GE": "GE Aerospace",
+    "CVX": "Chevron Corporation",
+    "LIN": "Linde plc",
+    "NEM": "Newmont Corporation",
+    "NEE": "NextEra Energy, Inc.",
+    "DUK": "Duke Energy Corporation",
+    "AMT": "American Tower Corporation",
+    "PLD": "Prologis, Inc.",
     "SPY": "SPDR S&P 500 ETF Trust",
     "QQQ": "Invesco QQQ Trust - Nasdaq 100",
     "IWM": "iShares Russell 2000 ETF",
@@ -30,10 +43,23 @@ ASSET_NAMES = {
     "GLD": "SPDR Gold Shares",
 }
 
+ASSET_SECTORS = {
+    "AAPL": "Tecnologia", "MSFT": "Tecnologia", "NVDA": "Tecnologia",
+    "GOOGL": "Comunicazioni", "META": "Comunicazioni",
+    "AMZN": "Consumi discrezionali", "HD": "Consumi discrezionali",
+    "PG": "Beni di prima necessita", "KO": "Beni di prima necessita",
+    "JPM": "Finanza", "V": "Finanza", "JNJ": "Salute", "LLY": "Salute",
+    "CAT": "Industria", "GE": "Industria", "XOM": "Energia", "CVX": "Energia",
+    "LIN": "Materiali", "NEM": "Materiali", "NEE": "Servizi pubblici",
+    "DUK": "Servizi pubblici", "AMT": "Immobiliare", "PLD": "Immobiliare",
+}
+
 
 def asset_label(symbol: str) -> str:
     name = ASSET_NAMES.get(symbol.upper())
-    return f"{symbol} ({name})" if name else symbol
+    sector = ASSET_SECTORS.get(symbol.upper())
+    details = ", ".join(value for value in (name, f"settore: {sector}" if sector else "") if value)
+    return f"{symbol} ({details})" if details else symbol
 
 
 @dataclass

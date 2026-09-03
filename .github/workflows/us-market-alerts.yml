@@ -85,6 +85,10 @@ jobs:
           found = forbidden.intersection(portfolio.get("symbols", []))
           if found:
               raise SystemExit(f"Safety check failed: forbidden non-equity symbols: {sorted(found)}")
+          sectors = portfolio.get("sector_by_symbol", {})
+          missing = set(portfolio.get("symbols", [])) - set(sectors)
+          if missing or len(set(sectors.values())) < 11:
+              raise SystemExit("Safety check failed: equity universe must cover all 11 sectors")
           PY
 
       - name: Validate Telegram secrets

@@ -8,7 +8,31 @@ runtime:
 portfolio:
   # Liquid listed companies only: no ETFs, funds, crypto, leverage or shorting.
   instrument_type: equities
-  symbols: [AAPL, MSFT, NVDA, AMZN, GOOGL, META, JPM, JNJ, PG, XOM]
+  symbols: [AAPL, MSFT, NVDA, GOOGL, META, AMZN, HD, PG, KO, JPM, V, JNJ, LLY, CAT, GE, XOM, CVX, LIN, NEM, NEE, DUK, AMT, PLD]
+  sector_by_symbol:
+    AAPL: Information Technology
+    MSFT: Information Technology
+    NVDA: Information Technology
+    GOOGL: Communication Services
+    META: Communication Services
+    AMZN: Consumer Discretionary
+    HD: Consumer Discretionary
+    PG: Consumer Staples
+    KO: Consumer Staples
+    JPM: Financials
+    V: Financials
+    JNJ: Health Care
+    LLY: Health Care
+    CAT: Industrials
+    GE: Industrials
+    XOM: Energy
+    CVX: Energy
+    LIN: Materials
+    NEM: Materials
+    NEE: Utilities
+    DUK: Utilities
+    AMT: Real Estate
+    PLD: Real Estate
   start_date: '2020-01-01'
   end_date: null
   lookback_days: 126

@@ -135,8 +135,7 @@ def test_live_advisor_config_preserves_long_only():
     assert config["portfolio"]["max_weight"] == 0.25
     assert config["portfolio"]["gross_limit"] == 0.75
     assert config["portfolio"]["instrument_type"] == "equities"
-    assert set(config["portfolio"]["symbols"]) == {
-        "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "JPM", "JNJ", "PG", "XOM"
-    }
+    assert len(config["portfolio"]["symbols"]) == 23
+    assert len(set(config["portfolio"]["sector_by_symbol"].values())) == 11
     assert config["runtime"]["pipeline_mode"] is False
     assert config["alerts"]["estimated_tax_rate"] == 0.26
