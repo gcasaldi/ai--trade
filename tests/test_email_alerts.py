@@ -40,10 +40,10 @@ def test_position_email_is_classified_and_deduplicated(monkeypatch, tmp_path):
 
     assert manager.notify_position_changes("run-1", {"SPY": 0.30}, {"SPY": 101.5})
     assert "COMPRA" in FakeSMTP.sent[-1].get_content()
-    assert "SPY (SPDR S&P 500 ETF Trust)" in FakeSMTP.sent[-1].get_content()
-    assert "Compra solo tra 101.25 e 101.75" in FakeSMTP.sent[-1].get_content()
-    assert "se scende a 99.47" in FakeSMTP.sent[-1].get_content()
-    assert "se sale a 105.56" in FakeSMTP.sent[-1].get_content()
+    assert "Titolo: SPDR S&P 500 ETF Trust (SPY)" in FakeSMTP.sent[-1].get_content()
+    assert "Entra solo tra: USD 101,25 e USD 101,75" in FakeSMTP.sent[-1].get_content()
+    assert "se scende a: USD 99,47" in FakeSMTP.sent[-1].get_content()
+    assert "vendita a: USD 105,56" in FakeSMTP.sent[-1].get_content()
     assert not manager.notify_position_changes("run-2", {"SPY": 0.30}, {"SPY": 102.0})
     assert len(FakeSMTP.sent) == 1
 
@@ -107,10 +107,10 @@ def test_model_position_alerts_when_target_is_reached(monkeypatch, tmp_path):
     assert round(saved["ledger"]["realized_gross"], 4) == 1.025
     assert round(saved["ledger"]["estimated_tax"], 4) == 0.2665
     assert round(saved["ledger"]["realized_net"], 4) == 0.7585
-    assert "Tasse italiane stimate (26%): EUR 0.27" in FakeSMTP.sent[-1].get_content()
+    assert "Tasse italiane stimate (26%): EUR 0,27" in FakeSMTP.sent[-1].get_content()
 
     assert manager.notify_position_changes("run-3", {"SPY": 0.25}, {"SPY": 103.0})
-    assert "AZIONE: COMPRA SPY" in FakeSMTP.sent[-1].get_content()
+    assert "COSA FARE: COMPRA" in FakeSMTP.sent[-1].get_content()
 
 
 def test_legacy_weight_state_rebuilds_model_position(monkeypatch, tmp_path):

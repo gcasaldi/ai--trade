@@ -57,9 +57,20 @@ ASSET_SECTORS = {
 
 def asset_label(symbol: str) -> str:
     name = ASSET_NAMES.get(symbol.upper())
-    sector = ASSET_SECTORS.get(symbol.upper())
-    details = ", ".join(value for value in (name, f"settore: {sector}" if sector else "") if value)
-    return f"{symbol} ({details})" if details else symbol
+    return f"{name} ({symbol})" if name else symbol
+
+
+def asset_details(symbol: str) -> str:
+    sector = ASSET_SECTORS.get(symbol.upper(), "Non classificato")
+    return f"Titolo: {asset_label(symbol)}\nSettore: {sector}"
+
+
+def money(value: float) -> str:
+    return f"EUR {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def usd_price(value: float) -> str:
+    return f"USD {value:.2f}".replace(".", ",")
 
 
 @dataclass
@@ -216,11 +227,11 @@ class AlertManager:
     @staticmethod
     def _sale_result_text(gross: float, tax: float, net: float, ledger: dict[str, float]) -> str:
         return (
-            f"\nRisultato prima delle tasse: EUR {gross:+.2f}"
-            f"\nTasse italiane stimate (26%): EUR {tax:.2f}"
-            f"\nRisultato dopo la stima delle tasse: EUR {net:+.2f}"
-            f"\nTotale dopo le tasse stimato dall'inizio: "
-            f"EUR {float(ledger.get('realized_net', 0.0)):+.2f}"
+            "\n\nRISULTATO STIMATO DELLA VENDITA"
+            f"\nPrima delle tasse: {money(gross)}"
+            f"\nTasse italiane stimate (26%): {money(tax)}"
+            f"\nDopo le tasse stimate: {money(net)}"
+            f"\nTotale netto dall'inizio: {money(float(ledger.get('realized_net', 0.0)))}"
         )
 
     def notify_position_changes(
@@ -259,9 +270,9 @@ class AlertManager:
                 )
                 gross, tax, net = self._record_sale(ledger, invested, entry, price)
                 changes.append(
-                    f"AZIONE: VENDI TUTTO {asset_label(symbol)}\n"
+                    f"COSA FARE: VENDI TUTTO\n{asset_details(symbol)}\n"
                     f"Motivo: il prezzo e sceso al limite di sicurezza.\n"
-                    f"Prezzo di ingresso del modello: {entry:.2f}\nPrezzo osservato: {price:.2f}"
+                    f"Prezzo di ingresso: {usd_price(entry)}\nPrezzo attuale: {usd_price(price)}"
                     + self._sale_result_text(gross, tax, net, ledger)
                 )
                 exited_symbols.add(symbol)
@@ -275,9 +286,9 @@ class AlertManager:
                 )
                 gross, tax, net = self._record_sale(ledger, invested, entry, price)
                 changes.append(
-                    f"AZIONE: VENDI TUTTO {asset_label(symbol)}\n"
+                    f"COSA FARE: VENDI TUTTO\n{asset_details(symbol)}\n"
                     f"Motivo: il prezzo ha raggiunto l'obiettivo di guadagno.\n"
-                    f"Prezzo di ingresso del modello: {entry:.2f}\nPrezzo osservato: {price:.2f}"
+                    f"Prezzo di ingresso: {usd_price(entry)}\nPrezzo attuale: {usd_price(price)}"
                     + self._sale_result_text(gross, tax, net, ledger)
                 )
                 exited_symbols.add(symbol)
@@ -302,21 +313,15 @@ class AlertManager:
                 action = "VENDI UNA PARTE"
             price = float(prices[symbol]) if symbol in prices else None
             amount = max(0.0, new) * max(0.0, float(self.reference_capital))
-            line = f"AZIONE: {action} {asset_label(symbol)}\n"
+            line = f"COSA FARE: {action}\n{asset_details(symbol)}\n"
             if action in {"COMPRA", "COMPRA ANCORA"}:
-                line += (
-                    f"Secondo il modello oggi possiamo entrare con prudenza. "
-                    f"Investi in totale circa EUR {amount:.2f}."
-                )
+                line += f"Budget totale suggerito: {money(amount)}"
             elif action == "VENDI UNA PARTE":
-                line += (
-                    f"Riduciamo un po' il rischio. Dopo la vendita lascia investiti "
-                    f"circa EUR {amount:.2f}."
-                )
+                line += f"Dopo la vendita lascia investiti: {money(amount)}"
             else:
-                line += "Per prudenza chiudiamo tutta la posizione indicata dal modello."
+                line += "Quantita da lasciare investita: zero"
             if price is not None:
-                line += f"\nPrezzo osservato: {price:.2f}"
+                line += f"\nPrezzo attuale del titolo: {usd_price(price)}"
                 if action in {"COMPRA", "COMPRA ANCORA"} and new > 0:
                     existing = positions.get(symbol, {})
                     existing_amount = float(existing.get("invested_amount", 0.0))
@@ -333,9 +338,9 @@ class AlertManager:
                     entry_low = price * 0.9975
                     entry_high = price * 1.0025
                     line += (
-                        f"\nCompra solo tra {entry_low:.2f} e {entry_high:.2f}."
-                        f"\nVendi per limitare la perdita se scende a {stop:.2f}."
-                        f"\nValuta di vendere in guadagno se sale a {target:.2f}."
+                        f"\nEntra solo tra: {usd_price(entry_low)} e {usd_price(entry_high)}"
+                        f"\nStop, vendi se scende a: {usd_price(stop)}"
+                        f"\nObiettivo, valuta la vendita a: {usd_price(target)}"
                     )
                     positions[symbol] = {
                         "entry_price": average_entry,
@@ -386,19 +391,18 @@ class AlertManager:
                     open_net = open_gross - open_tax
                     open_net_total += open_net
                     changes.append(
-                        f"AZIONE: MANTIENI {asset_label(symbol)}\n"
-                        f"Per ora non cambierei nulla. Teniamo questa posizione sotto controllo.\n"
-                        f"Prezzo di ingresso del modello: {entry:.2f}\n"
-                        f"Prezzo osservato: {price:.2f}\n"
-                        f"Guadagno o perdita dal prezzo di ingresso: {pnl:+.1%}\n"
-                        f"Risultato aperto dopo tasse stimate: EUR {open_net:+.2f}\n"
-                        f"Vendi per limitare la perdita se scende a {float(position['stop_price']):.2f}.\n"
-                        f"Valuta di vendere in guadagno se sale a {float(position['target_price']):.2f}."
+                        f"COSA FARE: MANTIENI\n{asset_details(symbol)}\n"
+                        f"Prezzo di ingresso: {usd_price(entry)}\n"
+                        f"Prezzo attuale: {usd_price(price)}\n"
+                        f"Rendimento: {pnl:+.1%}\n"
+                        f"Risultato aperto netto stimato: {money(open_net)}\n"
+                        f"Stop, vendi se scende a: {usd_price(float(position['stop_price']))}\n"
+                        f"Obiettivo, valuta la vendita a: {usd_price(float(position['target_price']))}"
                     )
                 changes.append(
-                    f"Risultato gia incassato dopo tasse stimate: "
-                    f"EUR {float(ledger.get('realized_net', 0.0)):+.2f}\n"
-                    f"Risultato ancora aperto dopo tasse stimate: EUR {open_net_total:+.2f}"
+                    "RIEPILOGO DEL PORTAFOGLIO MODELLO\n"
+                    f"Risultato gia incassato: {money(float(ledger.get('realized_net', 0.0)))}\n"
+                    f"Risultato ancora aperto: {money(open_net_total)}"
                 )
             else:
                 changes.append(
@@ -415,10 +419,10 @@ class AlertManager:
         )
         body = (
             greeting + "\n\n"
-            + "\n\n".join(changes) +
-            "\n\nIl bot non esegue ordini. Controlla sempre il prezzo prima di agire. "
-            "Niente leva, vendite allo scoperto o criptovalute. "
-            "Le tasse al 26% sono una stima: fa fede il rendiconto del broker."
+            + "\n\n--------------------\n\n".join(changes) +
+            "\n\nNota: prezzi dei titoli in dollari, budget in euro. Il bot non esegue ordini. "
+            "Per budget piccoli il broker deve supportare azioni frazionate e conversione valuta. "
+            "Niente leva, short o cripto. Tasse al 26% stimate: fa fede il broker."
         )
         sent = self._send_telegram(body)
         sent = self._send_email("[AI Hedge Fund] Segnale apri/chiudi posizioni", body) or sent
