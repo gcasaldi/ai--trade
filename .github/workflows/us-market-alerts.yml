@@ -116,8 +116,8 @@ jobs:
 
           sent = AlertManager(enabled=True, reference_capital=100.0).notify_position_changes(
               run_id="message-preview",
-              target_weights={"SPY": 0.25},
-              latest_prices={"SPY": 100.0},
+              target_weights={"AAPL": 0.25},
+              latest_prices={"AAPL": 200.0},
           )
           if not sent:
               raise SystemExit("Telegram message preview was not delivered")
