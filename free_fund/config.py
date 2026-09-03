@@ -23,6 +23,7 @@ class SystemConfig(BaseModel):
 
 
 class PortfolioConfig(BaseModel):
+    instrument_type: str = "mixed"
     symbols: list[str] = Field(default_factory=lambda: ["SPY", "QQQ", "IWM", "TLT", "GLD"])
     start_date: str = "2020-01-01"
     end_date: str | None = None
