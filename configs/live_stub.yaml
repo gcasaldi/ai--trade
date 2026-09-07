@@ -1,6 +1,9 @@
 system:
   output_dir: outputs
 
+dashboard:
+  enabled: true
+
 runtime:
   # Use the full orchestrator: it enforces long-only and sends advisory alerts.
   pipeline_mode: false

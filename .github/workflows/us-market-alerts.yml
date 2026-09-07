@@ -150,3 +150,12 @@ jobs:
             require_alert="--require-alert"
           fi
           uv run python scripts/run_daily.py --config configs/live_stub.yaml --dry-run $require_alert
+
+      - name: Save public dashboard analysis
+        if: always() && steps.advisory_hours.outputs.active == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-public
+          path: outputs/dashboard.json
+          if-no-files-found: warn
+          retention-days: 14

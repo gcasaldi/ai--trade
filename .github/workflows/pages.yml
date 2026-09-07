@@ -1,0 +1,103 @@
+name: Investment Dashboard Pages
+
+on:
+  push:
+    branches: [main]
+    paths: ['site/**', 'scripts/build_pages.py', 'free_fund/dashboard.py', '.github/workflows/pages.yml']
+  workflow_run:
+    workflows: ['US Market Telegram Alerts']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      refresh_analysis:
+        description: 'Run a fresh analysis without sending notifications or orders'
+        type: boolean
+        default: true
+
+concurrency:
+  group: investment-dashboard-pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+  pages: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      TZ: Europe/Rome
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Locate the latest bot analysis
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          EVENT_RUN: ${{ github.event.workflow_run.id }}
+        shell: bash
+        run: |
+          run="$EVENT_RUN"
+          if [ -z "$run" ]; then
+            run=$(gh api "repos/$REPOSITORY/actions/workflows/us-market-alerts.yml/runs?branch=main&status=completed&per_page=1" --jq '.workflow_runs[0].id // empty')
+          fi
+          if [ -n "$run" ]; then
+            conclusion=$(gh api "repos/$REPOSITORY/actions/runs/$run" --jq '.conclusion')
+            echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+            count=$(gh api "repos/$REPOSITORY/actions/runs/$run/artifacts" --jq '[.artifacts[] | select(.name == "dashboard-public" and .expired == false)] | length')
+            if [ "$count" -gt 0 ]; then
+              echo "run=$run" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+      - uses: actions/download-artifact@v4
+        if: steps.latest.outputs.run != ''
+        with:
+          name: dashboard-public
+          path: public-analysis
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.latest.outputs.run }}
+      - uses: astral-sh/setup-uv@v4
+        if: github.event_name == 'workflow_dispatch' && inputs.refresh_analysis
+      - name: Install analysis dependencies
+        if: github.event_name == 'workflow_dispatch' && inputs.refresh_analysis
+        run: uv sync
+      - name: Refresh analysis without notifications
+        id: refresh
+        if: github.event_name == 'workflow_dispatch' && inputs.refresh_analysis
+        continue-on-error: true
+        run: uv run python scripts/run_daily.py --config configs/live_stub.yaml --dry-run --no-alerts
+      - name: Build the public site
+        env:
+          BOT_CONCLUSION: ${{ steps.latest.outputs.conclusion }}
+          REFRESH_OUTCOME: ${{ steps.refresh.outcome }}
+        shell: bash
+        run: |
+          options=()
+          if [ "$REFRESH_OUTCOME" != 'skipped' ]; then
+            options+=(--snapshot outputs/dashboard.json)
+            if [ "$REFRESH_OUTCOME" != 'success' ]; then options+=(--failed); fi
+          else
+            options+=(--snapshot public-analysis/dashboard.json)
+            if [ -n "$BOT_CONCLUSION" ] && [ "$BOT_CONCLUSION" != 'success' ]; then options+=(--failed); fi
+          fi
+          python scripts/build_pages.py "${options[@]}"
+          node --test tests/test_dashboard_planner.cjs
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

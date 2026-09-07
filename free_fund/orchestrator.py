@@ -22,6 +22,7 @@ from .brokers import build_broker_router
 from .contracts import DecisionCycle, sha256_hex
 from .data import download_close_prices
 from .data_quality import DataQualityAgent
+from .dashboard import build_dashboard, write_dashboard
 from .healthcheck import HealthMonitor
 from .regime import MacroRegimeAgent, RegimeSnapshot
 from .research_council import LLMResearchCouncil
@@ -397,6 +398,8 @@ class CentralizedHedgeFundSystem:
                 encoding="utf-8",
             )
             self.alerts.notify("data_quality_failed", {"run_id": run_id, "reasons": dq.reasons})
+            if self.cfg.get("dashboard", {}).get("enabled", False):
+                write_dashboard(self.out_dir / "dashboard.json", build_dashboard(decision, window, self.cfg))
             self.tracer.finalize_trace(
                 trace_id,
                 root_span_id,
@@ -770,6 +773,8 @@ class CentralizedHedgeFundSystem:
             },
         )
         self.audit.append("decision", run_id, decision.to_dict())
+        if self.cfg.get("dashboard", {}).get("enabled", False):
+            write_dashboard(self.out_dir / "dashboard.json", build_dashboard(decision, window, self.cfg, research))
         if not self.audit.verify_tail(last_n=30):
             self.audit.append("audit_anomaly", run_id, {"issue": "hash_chain_verification_failed"})
             self.alerts.notify("audit_anomaly", {"run_id": run_id})

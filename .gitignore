@@ -4,6 +4,19 @@ __pycache__/
 outputs/*.csv
 logs/*
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.db
+*.sqlite
+*.sqlite3
+credentials.json
+secrets.json
+outputs/alert_state.json
+outputs/ai_trader_review/
 
 outputs/.yfinance_cache/
 outputs/last_decision.json
@@ -13,3 +26,5 @@ outputs/last_decision.json
 outputs/audit/events.jsonl
 outputs/traces/
 tracelm_traces.db
+_site/
+outputs/dashboard.json

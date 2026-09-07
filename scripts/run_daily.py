@@ -11,15 +11,20 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', default='configs/default.yaml')
     parser.add_argument('--dry-run', action='store_true', help='Skip broker order submission.')
+    parser.add_argument('--no-alerts', action='store_true', help='Disable all outgoing notifications for a dashboard-only cycle.')
     parser.add_argument(
         '--require-alert',
         action='store_true',
         help='Fail when this cycle does not deliver its expected advisory message.',
     )
     args = parser.parse_args()
+    if args.no_alerts and args.require_alert:
+        parser.error('--no-alerts cannot be combined with --require-alert')
 
     load_dotenv_file()
     cfg = load_config(args.config)
+    if args.no_alerts:
+        cfg.setdefault('alerts', {})['enabled'] = False
     system = CentralizedHedgeFundSystem(cfg)
     decision = system.run_cycle(execute=not args.dry_run)
     if args.require_alert and not getattr(system, 'last_position_alert_sent', False):
